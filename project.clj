@@ -5,5 +5,6 @@
                  [org.clojure/clojure-contrib "1.1.0-master-SNAPSHOT"]
                  [org.clojars.kjw/snakeyaml "1.5"]]
   :dev-dependencies [[leiningen/lein-swank "1.0.0-SNAPSHOT"]
-                     [vijual "0.1.0-SNAPSHOT"]]
+                     [vijual "0.1.0-SNAPSHOT"]
+                     [lein-javac "0.0.2-SNAPSHOT"]]
   :main stem.core)
