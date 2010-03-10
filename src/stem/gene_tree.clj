@@ -32,12 +32,9 @@
         coll-newick-strs (s/split file-str #";")]
     (map parse-gene-tree-str coll-newick-strs)))
 
-(defn rec-build-clocked-gene-tree
-  [[node left right]]
-)
 
 (defn build-clocked-gene-tree
-  "Builds a new tree form the rudimentary tree parsed from the gene tree file.
+  "Builds a new tree from the rudimentary tree parsed from the gene tree file.
   This new tree figures out the correct molecular time of each node, along with
   adding to each node a map of all of its ancestors.  This will help build the
   correct species tree"
