@@ -3,5 +3,7 @@ classes/*
 *.yaml
 */**#*
 */#*
+tmp.clj
+
 
 

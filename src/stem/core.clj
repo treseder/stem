@@ -11,18 +11,32 @@
 
 (defn parse-yaml-config-file
   "Reads in the yaml config file and returns a map with the following keys:
-  :files
-  :species
-  :properties
-
-  Each value of the map is another map of key value pairs"
+  :files = a map - keys are filenames, values are the constant
+  :species = a map - keys are specie names, values are comma separated lineage names
+  :properties = a map with user configurable properties"
   [file-name]
   (let [yaml (Yaml.)
         yaml-map (.load yaml (slurp file-name))]
     (zipmap (map keyword (.keySet yaml-map))
             (map #(into {} %) (.values yaml-map)))))
 
+(defn get-lineages-to-spec-map
+  "From the generic property map, builds the lineages to species map"
+  [map]
+  (let [s-map (:species map)
+        specs (keys s-map)]
+    (reduce
+     (fn [m [k v]]
+       (let [lineages (s/split v #",")]
+         (merge m (zipmap lineages (repeat k)))))
+     {} s-map)))
+
+
 (defn -main [& args]
   (let [prop-map (parse-yaml-config-file "settings.yaml")
-        gene-trees (g-tree/parse-gene-tree-file "genetrees.tre")]
+        lin-to-spec-map (get-lineages-to-spec-map prop-map)
+        gene-trees (g-tree/get-gene-trees (prop-map :files))]
     (pprint (count gene-trees))))
+
+
+
