@@ -1,7 +1,7 @@
 (ns stem.newick
   "Provides functions that parse newick formatted strings and build a binary
   tree with the following structure:
-  [{:name :time :c-time :descendents} [...] [...]]
+  [{:name :time :c-time :desc} [...] [...]]
 
   :name name of node (leaf names from newick, internal nodes are 'internal')
   :time float of elapsed time to ancestor (obtained from newick)
@@ -17,14 +17,14 @@
 (def *internal-node-name* "internal")
 (def *root-name* "stem-root")
 
-;; :name is a string, :time and :c-time are floats, and :descendents is a set
+;; :name is a string, :time and :c-time are floats, and :desc is a set
 (defstruct node :name :time :c-time :desc)
 
 (defn create-node [n time c-time desc-set]
   (struct node n time c-time desc-set))
 
-(defn is-leaf? [[n left right]]
-  (nil? left))
+(defn is-leaf? [node]
+  (let [[s left right] node] (nil? left)))
 
 (defn max-c-time [n1 n2]
   "Given a parent's direct descendent nodes, calculate its c-time"
@@ -48,14 +48,14 @@
   (if (= (count el) 1)
     (let [[n t-str] (s/split (name (first el)) #":")] ;; leafs are name:time
       ;; leaf node
-      [(create-node n (util/to-float t-str) 0.0 #{})])
+      [(create-node n (util/to-double t-str) 0.0 #{})])
     (let [left (build-tree (nth el 1))
           right (build-tree (nth el 0))
           c-time (max-c-time left right)
           desc-set (merge-desc left right)]
       ;; internal node
       [(create-node *internal-node-name*
-                    (util/to-float (nth el 2))
+                    (util/to-double (nth el 2))
                     c-time
                     desc-set)
        left right])))

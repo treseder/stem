@@ -9,14 +9,16 @@
   (if exit (System/exit 1)))
 
 
-(defmulti to-float class)
+(defmulti to-double class)
 
-(defmethod to-float clojure.lang.Keyword [k-word]
+(defmethod to-double clojure.lang.Keyword [k-word]
   (Double/parseDouble (name k-word)))
 
-(defmethod to-float java.lang.String [s]
+(defmethod to-double java.lang.String [s]
   (Double/parseDouble s))
 
+(defmethod to-double java.lang.Integer [i]
+  (double i))
 
 (defn get-file
   [f-name]
@@ -25,6 +27,26 @@
    (catch Exception _
      (abort (str "Couldn't find the file: " f-name)))))
 
-
 (defn remove-whitespace [s]
   (s/replace s #"\s" ""))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; multi-dim array functions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn array? [x] (-> x class .isArray))
+
+(defn see-array [x] (if (array? x) (map see-array x) x))
+
+(defn make-stem-array [rows cols]
+  (make-array Double/TYPE rows cols))
+
+(defmacro aget!
+  ([array y]      `(aget ~(vary-meta array assoc :tag 'doubles) ~y))
+  ([array x & ys] `(let [a# (aget ~(vary-meta array assoc :tag 'objects) ~@ys)]
+                     (aget! a# ~x))))
+
+(defmacro aset! [array x y v]
+  (let [nested-array `(aget ~(vary-meta array assoc :tag 'objects) ~y)
+        a-sym         (with-meta (gensym "a") {:tag 'doubles})]
+    `(let [~a-sym ~nested-array]
+       (aset ~a-sym ~x (double ~v)))))

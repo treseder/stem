@@ -1,5 +1,5 @@
 (ns stem.core
-  (:use [clojure.contrib pprint])
+  (:use [clojure.contrib pprint] [clojure set])
   (:require [clojure.contrib.str-utils2 :as s]
             [clojure.contrib.seq-utils :as s-utils]
             [stem.newick :as newick]
@@ -31,12 +31,47 @@
          (merge m (zipmap lineages (repeat k)))))
      {} s-map)))
 
+(defn lins->indexes [lins index-map]
+  (map index-map lins))
+
+(defn fill-matrix-for-lineage
+  [i js matrix c-time]
+  (doseq [j js]
+    (if (> i j) ;; matrix is symmetric - only fill half
+      (util/aset! matrix j i c-time)
+      (util/aset! matrix i j c-time))))
+
+(defn rec-fill-time-matrix
+  [node matrix lin-index parent-desc-set parent-c-time]
+  (if (newick/is-leaf? node)
+    (let [[node-map _ _] node
+          n-name (node-map :name)]
+      (fill-matrix-for-lineage (lin-index n-name)
+                               (lins->indexes (difference parent-desc-set #{n-name}) lin-index)
+                               matrix
+                               parent-c-time))
+    (let [[m left right] node
+          c-time (m :c-time)
+          desc (m :desc)]
+      (rec-fill-time-matrix left matrix lin-index desc c-time)
+      (rec-fill-time-matrix right matrix lin-index desc c-time))))
+
+(defn fill-time-matrix-for-tree
+  [tree matrix lin-set lin-index]
+  (rec-fill-time-matrix tree matrix lin-set lin-index (atom {})))
+
+
+
+
 
 (defn -main [& args]
   (let [prop-map (parse-yaml-config-file "settings.yaml")
-        lin-to-spec-map (get-lineages-to-spec-map prop-map)
-        gene-trees (g-tree/get-gene-trees (prop-map :files))]
-    (pprint (count gene-trees))))
+        line-to-spec-map (get-lineages-to-spec-map prop-map)
+        line-set (set (keys line-to-spec-map))
+        spec-set (set (vals line-to-spec-map))
+        gene-trees (g-tree/get-gene-trees (:files prop-map))]
+    (pprint line-set)
+    (pprint spec-set)))
 
 
 
