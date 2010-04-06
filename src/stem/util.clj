@@ -35,7 +35,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn array? [x] (-> x class .isArray))
 
-(defn see-array [x] (if (array? x) (map see-array x) x))
+(defn see-array [x] (if (array? x) (println (map see-array x)) x))
+
+(defn array->str [a]
+ (str "[" (reduce #(str %1 " " %2) a) "]"))
+
+(defn print-array [a]
+  "Prints a 1D or 2D array"
+  (println (if (> (count a) 1)
+     (reduce #(str %1 "\n" (array->str %2)) "" a)
+     (array->str a))))
 
 (defn make-stem-array [rows cols]
   (make-array Double/TYPE rows cols))

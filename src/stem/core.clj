@@ -31,38 +31,46 @@
          (merge m (zipmap lineages (repeat k)))))
      {} s-map)))
 
-(defn lins->indexes [lins index-map]
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;functions for building the coalescent matrix ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn get-sorted-lins-by-index [l-index]
+  (sort-by #(l-index %) (keys l-index)))
+
+(defn create-lin-index-map [l-set]
+  (zipmap l-set (range 0 10000)))
+
+(defn lins->indexes
+  "Takes a seq of lineage names and turns them into the indexes of the matrix"
+  [lins index-map]
   (map index-map lins))
 
 (defn fill-matrix-for-lineage
   [i js matrix c-time]
   (doseq [j js]
     (if (> i j) ;; matrix is symmetric - only fill half
-      (util/aset! matrix j i c-time)
-      (util/aset! matrix i j c-time))))
+      (util/aset! matrix i j c-time)
+      (util/aset! matrix j i c-time))))
 
 (defn rec-fill-time-matrix
   [node matrix lin-index parent-desc-set parent-c-time]
-  (if (newick/is-leaf? node)
-    (let [[node-map _ _] node
-          n-name (node-map :name)]
-      (fill-matrix-for-lineage (lin-index n-name)
-                               (lins->indexes (difference parent-desc-set #{n-name}) lin-index)
-                               matrix
-                               parent-c-time))
-    (let [[m left right] node
-          c-time (m :c-time)
-          desc (m :desc)]
-      (rec-fill-time-matrix left matrix lin-index desc c-time)
-      (rec-fill-time-matrix right matrix lin-index desc c-time))))
+  (let [[{name :name  desc-set :desc c-time :c-time} l-node r-node] node
+        ;; if leaf consider self the only desc
+        checked-set (if (empty? desc-set) #{name} desc-set)
+        diff-set (difference parent-desc-set checked-set)
+        js (lins->indexes diff-set lin-index)]
+    (doseq [i checked-set] (fill-matrix-for-lineage (lin-index i) js matrix parent-c-time))
+    (if-not (newick/is-leaf? node)
+      (do (rec-fill-time-matrix l-node matrix lin-index desc-set c-time)
+          (rec-fill-time-matrix r-node matrix lin-index desc-set c-time)))))
 
 (defn fill-time-matrix-for-tree
-  [tree matrix lin-set lin-index]
-  (rec-fill-time-matrix tree matrix lin-set lin-index (atom {})))
-
-
-
-
+  [tree matrix l-set]
+  (rec-fill-time-matrix tree
+                        matrix
+                        (create-lin-index-map l-set)
+                        ((first tree) :desc)
+                        0))
 
 (defn -main [& args]
   (let [prop-map (parse-yaml-config-file "settings.yaml")
@@ -70,8 +78,4 @@
         line-set (set (keys line-to-spec-map))
         spec-set (set (vals line-to-spec-map))
         gene-trees (g-tree/get-gene-trees (:files prop-map))]
-    (pprint line-set)
-    (pprint spec-set)))
-
-
-
+))

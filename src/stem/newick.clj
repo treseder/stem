@@ -26,6 +26,7 @@
 (defn is-leaf? [node]
   (let [[s left right] node] (nil? left)))
 
+
 (defn max-c-time [n1 n2]
   "Given a parent's direct descendent nodes, calculate its c-time"
   (let [[node1 _ _] n1
