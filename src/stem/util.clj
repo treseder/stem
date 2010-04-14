@@ -35,7 +35,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn array? [x] (-> x class .isArray))
 
-(defn see-array [x] (if (array? x) (println (map see-array x)) x))
+(defn see-array [x] (if (array? x) (map see-array x) x))
 
 (defn array->str [a]
  (str "[" (reduce #(str %1 " " %2) a) "]"))
@@ -46,16 +46,20 @@
      (reduce #(str %1 "\n" (array->str %2)) "" a)
      (array->str a))))
 
+(defn print-arrays [arrs]
+  (doseq [a arrs] (print-array a)))
+
+
 (defn make-stem-array [rows cols]
   (make-array Double/TYPE rows cols))
 
 (defmacro aget!
-  ([array y]      `(aget ~(vary-meta array assoc :tag 'doubles) ~y))
-  ([array x & ys] `(let [a# (aget ~(vary-meta array assoc :tag 'objects) ~@ys)]
-                     (aget! a# ~x))))
+  ([array x]      `(aget ~(vary-meta array assoc :tag 'doubles) ~x))
+  ([array x & ys] `(let [a# (aget ~(vary-meta array assoc :tag 'objects) ~x)]
+                     (aget! a# ~@ys))))
 
 (defmacro aset! [array x y v]
-  (let [nested-array `(aget ~(vary-meta array assoc :tag 'objects) ~y)
+  (let [nested-array `(aget ~(vary-meta array assoc :tag 'objects) ~x)
         a-sym         (with-meta (gensym "a") {:tag 'doubles})]
     `(let [~a-sym ~nested-array]
-       (aset ~a-sym ~x (double ~v)))))
+       (aset ~a-sym ~y (double ~v)))))

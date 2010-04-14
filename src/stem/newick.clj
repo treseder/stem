@@ -84,6 +84,16 @@
    (catch Exception e
      (util/abort "An error occured parsing the newick string" e))))
 
+(defn rec-tree->newick-str [node p-time]
+    (if (is-leaf? node)
+      (str (first node) ":" p-time)
+      (let [[time l r] node]
+        (str "(" (rec-tree->newick-str l time) ","  (rec-tree->newick-str r time) ")" ":" (- p-time time) ))))
+
+(defn tree->newick-str [tree]
+  (let [[n l r] tree]
+    (str "(" (rec-tree->newick-str l n) ","  (rec-tree->newick-str r n) ")" )))
+
 ;;;;;;;;;;;;;;;;;;
 ;; drawing trees
 ;;;;;;;;;;;;;;;;;;
@@ -99,5 +109,10 @@
       [d-name]
       [d-name (create-drawable-tree left) (create-drawable-tree right)])))
 
-(defn see-tree [vec-tree]
+(defn see-newick-tree [vec-tree]
   (vij/draw-binary-tree (create-drawable-tree vec-tree)))
+
+(defn see-tree [vec-tree]
+  (vij/draw-binary-tree vec-tree))
+
+
