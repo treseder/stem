@@ -2,6 +2,17 @@
   (:require [clojure.contrib.str-utils2 :as s])
   (:import [java.io File StringReader BufferedReader]))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; functions to output user information ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn comma-sep [seq]
+  (apply str (interpose "," seq)))
+
+(defn println-flush [s]
+  (println s)
+  (flush))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn abort [message e & exit]
   (println message)
   (if-not (nil? e)
