@@ -24,7 +24,7 @@
   "Zero times aren't really valid, but sometimes users include them; change
   to very small number "
   [num]
-  (if (zero? num) 0.0000001 num))
+  (if (zero? num) 0.000001 num))
 
 (defn create-node [n time c-time desc-set]
   (struct node (.trim n) time c-time desc-set))
@@ -91,8 +91,7 @@
          desc-set (merge-desc left right)]
      [(create-node *root-name* 0.0 c-time desc-set) left right])
    (catch Exception e
-     (util/abort "An error occured parsing the newick string" e))))
-
+     (util/abort "An error occured parsing the newick string" e false))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; functions to generate newick-str from tree ;;

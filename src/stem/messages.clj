@@ -13,7 +13,7 @@
   (println "Using theta = " theta) (println) (flush))
 
 (defn lin-set-message [s]
-  (println "There are " (count s) " lineages:")
+  (println "There are" (count s) "lineages:")
   (println (apply str (interpose "," s)))
   (println) (flush))
 
@@ -21,3 +21,9 @@
   (println "There are" (count s) "species:")
   (println (apply str (interpose "," s)))
   (println) (flush))
+
+(defn spec-newick-message [s]
+  (println "The Maximum Likelihood tree is (also written to file mletree.tre):")
+  (println)
+  (println s)
+  (flush))

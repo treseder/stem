@@ -22,7 +22,6 @@
 (defn create-struct-from-parts
   [rate-str newick-str theta]
   (let [rate (util/to-double rate-str)]
-    (println rate)
     (create-gene-tree
      (newick/build-tree-from-newick-str newick-str rate theta)
      rate)))

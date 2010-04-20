@@ -10,6 +10,12 @@
            [org.yaml.snakeyaml Yaml])
   (:gen-class))
 
+;; if this value is true, then a caught exception will exit the
+;; system.  If in dev, we don't want it to exit since it destroys the
+;; REPL session.  This should be set to true before generating the
+;; uber jar
+(def in-production? false)
+
 (defn parse-yaml-config-file
   "Reads in the yaml config file and returns a map with the following keys:
   :files = a map - keys are filenames, values are the constant
@@ -61,7 +67,7 @@
         ;; if leaf consider self the only desc
         checked-set (if (empty? desc-set) #{name} desc-set)
         diff-set (difference parent-desc-set checked-set)
-        js (lins->indexes diff-set lin-index)]
+        js (name->indexes diff-set lin-index)]
     (doseq [i checked-set] (fill-matrix-for-lineage (lin-index i) js matrix parent-c-time))
     (if-not (newick/is-leaf? node)
       (do (rec-fill-time-matrix l-node matrix lin-index desc-set c-time)
@@ -157,8 +163,8 @@
   "Given a node and a map of nodes merge the node with its appropriate
   ancestor.
   node-map is of the form {#{s1 s2} [.55 [s1][s2]]}
-  node is a vector of size 3 the contains the coalescent time of the two species:
-  [.55 s1 s2].  Ancestors are all internal nodes, with the species being leaves.
+  node is a vector of size 3 that contains the coalescent time of the two species:
+  [0.55 s1 s2].  Ancestors are all internal nodes, with the species being leaves.
   of the tree."
   [node-map node]
   (let [[time l-name r-name] node
@@ -184,7 +190,7 @@
         (~res-f res# ~@args))
       res#)
     (catch Exception e#
-      (util/abort ~e-message e#))))
+      (util/abort ~e-message e# ~in-production?))))
 
 (defn -main
   "Entry point for STEM 2.0. Throughout the code, lin refers to lineages, and spec refers
@@ -205,5 +211,7 @@
         species-matrix (to-species-matrix least-matrix lin-to-index spec-set spec-to-index lin-to-spec)
         lst (matrix->sorted-list species-matrix index-to-spec)
         [tree-set tree] (first (tree-from-seq lst))
-        species-newick (newick/tree->newick-str tree)]
-    (println lst) (println species-newick)))
+        species-newick (with-exc-and-out (newick/tree->newick-str tree) m/spec-newick-message "")]
+    (println lst)
+    (util/write-to-file "mletree.tre" species-newick))
+  (if in-production? (System/exit 0)))

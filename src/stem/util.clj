@@ -1,5 +1,6 @@
 (ns stem.util
-  (:require [clojure.contrib.str-utils2 :as s])
+  (:require [clojure.contrib.str-utils2 :as s]
+            [clojure.contrib.duck-streams :as duck])
   (:import [java.io File StringReader BufferedReader]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -13,12 +14,11 @@
   (flush))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn abort [message e & exit]
+(defn abort [message e exit?]
   (println message)
   (if-not (nil? e)
     (println (.getMessage e)))
-  (if exit (System/exit 1)))
-
+  (if exit? (System/exit 1)))
 
 (defmulti to-double class)
 
@@ -30,6 +30,9 @@
 
 (defmethod to-double java.lang.Integer [i]
   (double i))
+
+(defn write-to-file [f str]
+  (duck/spit f str))
 
 (defn get-file
   [f-name]
