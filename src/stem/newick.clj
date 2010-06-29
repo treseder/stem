@@ -14,11 +14,19 @@
             [clojure.set :as c-set]
             [vijual :as vij]))
 
+
 (def *internal-node-name* "internal")
 (def *root-name* "stem-root")
 
 ;; :name is a string, :time and :c-time are floats, and :desc is a set
 (defstruct node :name :time :c-time :desc)
+
+(defn tree->seq
+  "Takes a tree and returns a seq of all the nodes in depth-first order."
+  [[node l r]]
+  (if-not l
+    [node]
+    (lazy-cat (tree->seq l) (tree->seq r) [node])))
 
 (defn zero->tiny-num
   "Zero times aren't really valid, but sometimes users include them; change
@@ -54,17 +62,18 @@
   "Builds the nested vector tree structure that will be used throughout
   the rest of the program"  
   [el div]
-  (if (= (count el) 1)
-    (let [[n t-str] (s/split (name (first el)) #":")] ;; leafs are name:time
+  (if (= (count el) 2)
+    (let [[n t] el] ;; leafs are name:time
       ;; leaf node
-      [(create-node n (/ (util/to-double t-str) div) 0.0 #{})])
-    (let [left (build-tree (nth el 1) div)
-          right (build-tree (nth el 0) div)
+      [(create-node (str n) (/ t div) 0.0 #{})])
+    (let [[l r t] el
+          left (build-tree l div)
+          right (build-tree r div)
           c-time (max-c-time left right)
           desc-set (merge-desc left right)]
       ;; internal node
       [(create-node *internal-node-name*
-                    (/ (zero->tiny-num (util/to-double (nth el 2))) div)
+                    (/ (zero->tiny-num t) div)
                     (zero->tiny-num c-time)
                     desc-set)
        left right])))
@@ -72,7 +81,7 @@
 (defn prep-newick-str
   "To make the tree easier for parsing the commas are replaced with ')('."
   [n-str]
-  (str "(" (s/replace n-str "," ")(") ")"))
+  (str "(" (s/replace (s/replace n-str "," ")(") ":" " ") ")"))
 
 (defn build-tree-from-newick-str
   "Parses s and builds a binary tree structure as a vector of
@@ -98,7 +107,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn rec-tree->newick-str [node p-time]
     (if (is-leaf? node)
-      (str (first node) ":" p-time)
+      (str (first node) ":"  (format "%1.6f" p-time))
       (let [[time l r] node]
         (str "(" (rec-tree->newick-str l time) ","  (rec-tree->newick-str r time) ")" ":" (- p-time time) ))))
 
