@@ -34,6 +34,8 @@
 (defn calc-mle-for-branch
   "TODO: what about c-events that occur at the exact same time?"
   [coal-nodes lins-in-branch num-lins-at-start start end two-div-theta]
+  ;; the coal-filter-fn could be refactored out to avoid duplication,
+  ;; but who can resist that nice closure
   (let [coal-filter-fn (fn [{c-time :c-time c-lins :desc}]
                          (and (>= c-time start) (< c-time end)
                               (subset? c-lins lins-in-branch)))
@@ -45,7 +47,9 @@
         [cum-mle rem-num-lins last-c-time] (reduce mle-fn [1 num-lins-at-start start] coal-events)]
     ;; at the end of each branch, the probability that the remaining
     ;; lineages don't coalesce must be calculated, too
-    [(* cum-mle (calc-mle-for-coalescent-event rem-lins two-div-theta last-c-time end true)), rem-num-lins]))
+    (if (> rem-num-lins 1)
+      [(* cum-mle (calc-mle-for-coalescent-event rem-num-lins two-div-theta last-c-time end true)), rem-num-lins]
+      [cum-mle, rem-num-lins])))
 
 (defn calc-mle-for-branches
   "Calculates mle for each branch and returns a vector of the form:
@@ -56,7 +60,7 @@
   (let [[n l r] s-node]
     (if-not l ;leaf
       (let [cum-lins (spec-to-lin (:name n))]
-        [1 cum-lins (count free-lins) 0])
+        [1 cum-lins (count cum-lins) 0])
       (let [end-time (:c-time n)
             [l-cum-mle l-lins l-num-lins l-time] (calc-mle-for-branches l coal-nodes spec-to-lin two-div-theta)
             [r-cum-mle r-lins r-num-lins r-time] (calc-mle-for-branches r coal-nodes spec-to-lin two-div-theta)
@@ -77,9 +81,16 @@
   "Calculates the maximum likelihood estimate given a
   gene tree matrix and a species tree"
   [gene-tree s-tree spec-to-lin two-div-theta]
-  (let [coal-nodes (tree->sorted-internal-nodes gene-tree)]
-    ))
+  (let [coal-nodes (tree->sorted-internal-nodes gene-tree)
+        [tree-mle coaled-lins num-lins end-time] (calc-mle-for-branches s-tree coal-nodes spec-to-lin two-div-theta)
+        ;; there could still be coalescent events that occur *before* (or
+        ;; after, depending on outlook) the first speciation event
+        [before-tree-mle _] (calc-mle-for-branch coal-nodes coaled-lins
+                                                 num-lins end-time
+                                                 Double/POSITIVE_INFINITY
+                                                 two-div-theta)]
+    (* tree-mle before-tree-mle)))
 
 (defn calc-mle
   [gene-trees s-tree spec-to-lin theta]
-  (reduce #(+ %1 (Math/log (calc-mle %2 s-tree spec-to-lin (/ 2 theta)))) 0 gene-trees))
+  (reduce #(+ %1 (Math/log (calc-mle-for-tree %2 s-tree spec-to-lin (/ 2 theta)))) 0 gene-trees))
