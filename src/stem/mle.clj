@@ -14,7 +14,7 @@
   (and (<= (count set1) (count set2))
        (every? set2 set1)))
 
-(defn zero->tiny-num [num]
+(defn zero->tiny [num]
   (if-not (zero? num) num 0.00001))
 
 (defn factorial [n] (reduce * (range 2 (inc n))))
@@ -27,18 +27,24 @@
 
 (defn calc-mle-for-coalescent-event
   [num-lins two-div-theta start end leaving?]
-  (let [comb (a-choose-b num-lins 2)
-        exp-part (Math/exp (- (* comb (- end start) two-div-theta)))]
-    (if-not leaving? (* two-div-theta exp-part) exp-part)))
+  (let [comb (* num-lins (- num-lins 1))
+        time-dif (zero->tiny (- end start))
+        exp-part (Math/exp (- (* comb time-dif)))
+        mle  (if-not leaving? (* 2 exp-part) exp-part)]
+    ;(println (str "mle start, stop: " start " " end))
+    ;(println (str "mle: " (Math/log mle)))
+    mle))
 
 (defn calc-mle-for-branch
   "TODO: what about c-events that occur at the exact same time?"
   [coal-nodes lins-in-branch num-lins-at-start start end two-div-theta]
   ;; the coal-filter-fn could be refactored out to avoid duplication,
   ;; but who can resist that nice closure
+  ;(println (str "lins-in-branch: " lins-in-branch))
+  ;(println (str "lins-at-start: " num-lins-at-start))
+  ;(println (str "Times: " start " " end))
   (let [coal-filter-fn (fn [{c-time :c-time c-lins :desc}]
-                         (and (>= c-time start) (< c-time end)
-                              (subset? c-lins lins-in-branch)))
+                         (and (>= c-time start) (< c-time end) (subset? c-lins lins-in-branch)))
         coal-events (filter coal-filter-fn coal-nodes)
         mle-fn (fn [[mle num-lins last-c-time] event]
                  [(* mle (calc-mle-for-coalescent-event num-lins two-div-theta last-c-time (:c-time event) false)),
@@ -47,9 +53,13 @@
         [cum-mle rem-num-lins last-c-time] (reduce mle-fn [1 num-lins-at-start start] coal-events)]
     ;; at the end of each branch, the probability that the remaining
     ;; lineages don't coalesce must be calculated, too
-    (if (> rem-num-lins 1)
-      [(* cum-mle (calc-mle-for-coalescent-event rem-num-lins two-div-theta last-c-time end true)), rem-num-lins]
-      [cum-mle, rem-num-lins])))
+    (let [ret-mle (if (> rem-num-lins 1)
+                    [(* cum-mle
+                        (calc-mle-for-coalescent-event
+                         rem-num-lins two-div-theta last-c-time end true)), rem-num-lins]
+                    [cum-mle, rem-num-lins])]
+      (println (str "return mle for branch: " ret-mle))
+      ret-mle)))
 
 (defn calc-mle-for-branches
   "Calculates mle for each branch and returns a vector of the form:
@@ -65,9 +75,11 @@
             [l-cum-mle l-lins l-num-lins l-time] (calc-mle-for-branches l coal-nodes spec-to-lin two-div-theta)
             [r-cum-mle r-lins r-num-lins r-time] (calc-mle-for-branches r coal-nodes spec-to-lin two-div-theta)
             ;; calculating the two branches from this node to its two descendents
-            [l-mle l-end-lins] (calc-mle-for-branch coal-nodes l-lins l-num-lins l-time end-time)
-            [r-mle r-end-lins] (calc-mle-for-branch coal-nodes r-lins r-num-lins r-time end-time)]
-        [(* l-cum-mle r-cum-mle) (union l-lins r-lins) (+ l-end-lins r-end-lins) end-time]))))
+            [l-mle l-end-lins] (calc-mle-for-branch coal-nodes l-lins l-num-lins l-time end-time two-div-theta)
+            [r-mle r-end-lins] (calc-mle-for-branch coal-nodes r-lins r-num-lins r-time end-time two-div-theta)
+            cum-mle (* l-cum-mle r-cum-mle l-mle r-mle)]
+        ;(println (str "cum-mle: " l-cum-mle " " r-cum-mle " " l-mle " " r-mle " " cum-mle))
+        [cum-mle (union l-lins r-lins) (+ l-end-lins r-end-lins) end-time]))))
 
 
 (defn tree->sorted-internal-nodes
@@ -93,4 +105,4 @@
 
 (defn calc-mle
   [gene-trees s-tree spec-to-lin theta]
-  (reduce #(+ %1 (Math/log (calc-mle-for-tree %2 s-tree spec-to-lin (/ 2 theta)))) 0 gene-trees))
+  (reduce #(+ %1 (Math/log (calc-mle-for-tree (:vec-tree %2) s-tree spec-to-lin (/ 2 theta)))) 0 gene-trees))

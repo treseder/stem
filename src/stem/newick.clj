@@ -23,10 +23,10 @@
 
 (defn tree->seq
   "Takes a tree and returns a seq of all the nodes in depth-first order."
-  [[node l r]]
+  [[n l r]]
   (if-not l
-    [node]
-    (lazy-cat (tree->seq l) (tree->seq r) [node])))
+    [n]
+    (lazy-cat (tree->seq l) (tree->seq r) [n])))
 
 (defn zero->tiny-num
   "Zero times aren't really valid, but sometimes users include them; change

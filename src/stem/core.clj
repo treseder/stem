@@ -6,6 +6,7 @@
             [stem.gene-tree :as g-tree]
             [stem.util :as util]
             [stem.messages :as m]
+            [stem.mle :as mle]
             [clojure.contrib.combinatorics :as comb])
   (:import [java.io BufferedReader FileReader]
            [org.yaml.snakeyaml Yaml])
@@ -229,10 +230,12 @@
         m-size (count lin-set)
         min-gene-matrix (reduce reduce-matrices (util/make-stem-array m-size m-size) gene-matrices)
         spec-matrix (to-spec-matrix min-gene-matrix lin-to-index spec-set spec-to-index lin-to-spec)
-        lst (matrix->sorted-list spec-matrix index-to-spec)
+        spec-lst (matrix->sorted-list spec-matrix index-to-spec)
         ;; lst-of-perm (get-list-permutations lst)
-        [tree-set tree] (first (tree-from-seq lst))
-        species-newick (with-eval-and-out (newick/tree->newick-str tree) m/spec-newick-message "")]
-    (util/write-to-file "mletree.tre" species-newick)
-    (println tree))
+        [tree-set tree] (first (tree-from-seq spec-lst))
+        species-newick (with-eval-and-out (newick/tree->newick-str tree) m/spec-newick-message "")
+        species-vec-tree (newick/build-tree-from-newick-str species-newick 1.0 1.0)
+        mle (mle/calc-mle gene-trees species-vec-tree spec-to-lin theta)]
+    (println (str "The mle is: " mle))
+    (util/write-to-file "mletree.tre" species-newick))
   (if in-production? (System/exit 0)))
