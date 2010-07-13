@@ -1,0 +1,32 @@
+Input files are parsed by method:
+
+1. A file that contains all of the gene trees, where each tree conforms to the newick format, each tree is separated by a newline character, and each tree is preceded by its multiplier (in brackets).  This is unchanged from STEM 1.1., and probably how you're doing it now.
+
+-OR-
+
+2. A new option is to declare in the settings file (which I'll outline below) the filename(s) of the tree file(s), each containing any number of newick-formatted trees.  No tree multiplier is needed to precede each newick string.  Instead it is set in the settings file.  This means that STEM 2.0 assumes that all trees in a particular file have the same multiplier.  There is no limit to the number of input files.
+
+The settings file is based on the YAML markup language.  The spec can be found here:
+
+http://www.yaml.org/
+
+It is a small, simple, readable format, and for our purposes STEM 2.0 only uses a small subset of its features.  The settings file must be named 'settings', 'settings.txt', or 'settings.yaml'.  STEM 2.0 looks for the file in that order, in the directory where the STEM jar is executed.  
+
+The settings file itself is broken up into three small sections.  Here is an example file:
+
+properties:
+  search: 1	   #0=user-tree, 1=MLE, 2=search
+  theta: 0.001
+  num_saved_trees: 15
+species:
+  Species1: Name1, Name2, Name3
+  Species2: Name4, Name5
+  Species3: Name6, MyName7
+  Species4: Name8
+files:
+  trees1.tre: 1.0       # notice the space after each ':'
+  trees2.txt: 1.23
+
+The properties section is where various STEM parameters are set, e.g. theta.  The species section is similar to STEM 1.1: each species identifier is followed by a comma-separated list of its associated  lineages.  The files section is last (although, these sections can be in any order in the file).  If you are using parsing method 1 above, then there will be no files section, and STEM 2.0 will look for a file named 'genetrees.tre' in the current working directory.  If you are going to use method (2), then this is the section where each file is declared, followed by its tree multiplier.
+
+A couple of notes: indentation matters, i.e. it's how YAML delineates sections.  Each child of one of the sections is indented (uniformly) more than its parent.  And lastly, for now, there must be a space after each ':'.

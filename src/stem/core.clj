@@ -28,11 +28,12 @@
   :files = a map - keys are filenames, values are the constant
   :species = a map - keys are specie names, values are comma separated lineage names
   :properties = a map with user configurable properties"
-  [file-name]
+  ([] (parse-yaml-config-file "settings"))
+  ([file-name]
   (let [yaml (Yaml.)
         yaml-map (.load yaml (slurp file-name))]
     (zipmap (map keyword (.keySet yaml-map))
-            (map #(into {} %) (.values yaml-map)))))
+            (map #(into {} %) (.values yaml-map))))))
 
 (defn build-lin-to-spec-map
   "From the generic property map, builds the lineages to species map"
@@ -202,12 +203,12 @@
 (defn tree-from-seq [s]
   (reduce #(find-and-merge-nodes %1 %2) {} s))
 
-(defmacro with-eval-and-out [form res-f e-message & args]
+(defmacro with-eval-and-out [form res-fn e-message & args]
   `(try
     (let [res# ~form]
       (if (nil? ~args)
-        (~res-f res#)
-        (~res-f res# ~@args))
+        (~res-fn res#)
+        (~res-fn res# ~@args))
       res#)
     (catch Exception e#
       (util/abort ~e-message e# ~in-production?))))
