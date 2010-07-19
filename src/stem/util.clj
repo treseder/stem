@@ -41,6 +41,19 @@
    (catch Exception _
      (abort (str "Couldn't find the file: " f-name)))))
 
+(defn contains-settings?
+  [filename]
+  (or (. filename equals "settings")
+      (. filename equals "settings.txt")
+      (. filename  equals "settings.yaml")))
+
+(defn get-settings-filename
+  "Searches the current directory for a file that is named
+  'settings', or 'settings.txt', or 'settings.yaml', in that order"
+  []
+  (first (sort (filter contains-settings? (. (File. ".") list)))))
+
+
 (defn remove-whitespace [s]
   (s/replace s #"\s" ""))
 
@@ -64,8 +77,9 @@
   (doseq [a arrs] (print-array a)))
 
 
-(defn make-stem-array [rows cols]
-  (make-array Double/TYPE rows cols))
+(defn make-stem-array
+  ([square] (make-stem-array square square))
+  ([rows cols] (make-array Double/TYPE rows cols)))
 
 (defmacro aget!
   ([array x]      `(aget ~(vary-meta array assoc :tag 'doubles) ~x))

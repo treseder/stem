@@ -23,12 +23,12 @@
 ;; maps
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn parse-yaml-config-file
+(defn parse-settings-file
   "Reads in the yaml config file and returns a map with the following keys:
   :files = a map - keys are filenames, values are the constant
   :species = a map - keys are specie names, values are comma separated lineage names
   :properties = a map with user configurable properties"
-  ([] (parse-yaml-config-file "settings"))
+  ([] (parse-settings-file (util/get-settings-filename)))
   ([file-name]
   (let [yaml (Yaml.)
         yaml-map (.load yaml (slurp file-name))]
@@ -129,7 +129,8 @@
         (util/aset! s-matrix i j c-time)
         (util/aset! s-matrix j i c-time)))))
 
-(defn to-spec-matrix [l-matrix lin-to-index spec-set spec-to-index lin-to-spec]
+(defn to-spec-matrix
+  [l-matrix {:keys [lin-to-index spec-set spec-to-index lin-to-spec]}]
   (let [s-count (count spec-set)
         s-matrix (util/make-stem-array s-count s-count)
         l-count (count lin-to-spec)
@@ -198,7 +199,7 @@
   the tree should be built, with some nodes having the same coalescent time.
   Find all permutations of this list, thus finding all ml trees"
   [lst]
-  (apply comb/cartesian-product (s-utils/group-by first lst)))
+  (apply comb/cartesian-product (vals (s-utils/group-by first lst))))
 
 (defn tree-from-seq [s]
   (reduce #(find-and-merge-nodes %1 %2) {} s))
@@ -206,37 +207,50 @@
 (defmacro with-eval-and-out [form res-fn e-message & args]
   `(try
     (let [res# ~form]
-      (if (nil? ~args)
-        (~res-fn res#)
-        (~res-fn res# ~@args))
+      (~res-fn res# ~@args)
       res#)
     (catch Exception e#
       (util/abort ~e-message e# ~in-production?))))
+
+(defn create-env
+  "This functions return a hashmap of all of the various data-structures that are necessary
+  to generate species trees and their likelihoods"
+  [settings-map]
+  (let [lin-to-spec (build-lin-to-spec-map settings-map)
+        spec-to-lin (build-spec-to-lin-map settings-map)
+        lin-set (with-eval-and-out (set (keys lin-to-spec)) m/lin-set-message "")
+        spec-set (with-eval-and-out (set (vals lin-to-spec)) m/spec-set-message "")
+        spec-to-index (create-name-to-index-map spec-set)
+        index-to-spec (zipmap (vals spec-to-index) (keys spec-to-index))        
+        lin-to-index (create-name-to-index-map lin-set)]
+    {:lin-to-spec lin-to-spec
+     :spec-to-lin spec-to-lin
+     :lin-set lin-set
+     :spec-set spec-set
+     :spec-to-index spec-to-index
+     :index-to-spec index-to-spec
+     :lin-to-index lin-to-index
+     :mat-size (count lin-set)}))
+
 
 (defn -main
   "Entry point for STEM 2.0. Throughout the code, lin refers to lineages, and spec refers
   to species."
   [& args]
-  (let [prop-map (with-eval-and-out (parse-yaml-config-file "settings.yaml") m/yaml-message (m/e-strs :yaml))
-        theta (with-eval-and-out ((:properties prop-map) "theta") m/theta-message "")
-        lin-to-spec (build-lin-to-spec-map prop-map)
-        spec-to-lin (build-spec-to-lin-map prop-map)
-        lin-set (with-eval-and-out (set (keys lin-to-spec)) m/lin-set-message "")
-        spec-set (with-eval-and-out (set (vals lin-to-spec)) m/spec-set-message "")
-        spec-to-index (create-name-to-index-map spec-set)
-        index-to-spec (zipmap (vals spec-to-index) (keys spec-to-index))        
-        lin-to-index (create-name-to-index-map lin-set)
-        gene-trees (g-tree/get-gene-trees (:files prop-map) theta)
-        gene-matrices  (gene-trees-to-matrices gene-trees lin-to-index)
-        m-size (count lin-set)
-        min-gene-matrix (reduce reduce-matrices (util/make-stem-array m-size m-size) gene-matrices)
-        spec-matrix (to-spec-matrix min-gene-matrix lin-to-index spec-set spec-to-index lin-to-spec)
-        spec-lst (matrix->sorted-list spec-matrix index-to-spec)
-        ;; lst-of-perm (get-list-permutations lst)
+  (let [settings (with-eval-and-out (parse-settings-file) m/yaml-message (m/e-strs :yaml))
+        theta (with-eval-and-out ((:properties settings) "theta") m/theta-message "")
+        env (create-env settings)
+        gene-trees (g-tree/get-gene-trees (:files settings) theta)
+        gene-matrices  (gene-trees-to-matrices gene-trees (env :lin-to-index))
+        min-gene-matrix (reduce reduce-matrices (util/make-stem-array (env :mat-size)) gene-matrices)
+        spec-matrix (to-spec-matrix min-gene-matrix env)
+        spec-lst (matrix->sorted-list spec-matrix (env :index-to-spec))
+        lst-of-perm (get-list-permutations spec-lst)
         [tree-set tree] (first (tree-from-seq spec-lst))
-        species-newick (with-eval-and-out (newick/tree->newick-str tree) m/spec-newick-message "")
+        species-newick (with-eval-and-out
+                         (newick/tree->newick-str tree) m/spec-newick-message "" (count lst-of-perm))
         species-vec-tree (newick/build-tree-from-newick-str species-newick 1.0 1.0)
-        mle (mle/calc-mle gene-trees species-vec-tree spec-to-lin theta)]
-    (println (str "The mle is: " mle))
+        mle (with-eval-and-out (mle/calc-mle gene-trees species-vec-tree (env :spec-to-lin) theta)
+              m/mle-message "")]
     (util/write-to-file "mletree.tre" species-newick))
   (if in-production? (System/exit 0)))

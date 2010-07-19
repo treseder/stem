@@ -137,3 +137,5 @@
   (vij/draw-binary-tree vec-tree))
 
 
+(def ntree-6 "(Species6:6.303000,((Species1:3.052820,Species5:3.052820):1.143503,(Species2:2.023739,(Species3:1.117750,Species4:1.117750):0.905989):2.172584):2.106677)")
+
