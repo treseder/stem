@@ -1,29 +1,14 @@
 (ns stem.mle
   (:use [clojure.contrib pprint] [clojure set])
-  (:require [clojure.contrib.str-utils2 :as s]
-            [clojure.contrib.seq-utils :as s-utils]
-            [stem.newick :as newick]
+  (:require [stem.newick :as newick]
             [stem.gene-tree :as g-tree]
             [stem.util :as util]
             [clojure.contrib.combinatorics :as comb]))
 
 
-(defn subset? 
-  "Is set1 a subset of set2?"
-  [set1 set2]
-  (and (<= (count set1) (count set2))
-       (every? set2 set1)))
-
 (defn zero->tiny [num]
   (if-not (zero? num) num 0.00001))
 
-(defn factorial [n] (reduce * (range 2 (inc n))))
-
-(defn a-choose-b [a b]
-  "Returns the number of ways of choosing b items from a items."
-  (/ (factorial a)
-     (* (factorial b)
-        (factorial (- a b)))))
 
 (defn calc-mle-for-coalescent-event
   [num-lins two-div-theta start end leaving?]

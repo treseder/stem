@@ -9,7 +9,7 @@
 
   The library also contains a function to draw an ascii representation of the
   tree"
-  (:require [clojure.contrib.str-utils2 :as s]
+  (:require [clojure.string :as str]
             [stem.util :as util]
             [clojure.set :as c-set]
             [vijual :as vij]))
@@ -21,8 +21,7 @@
 ;; :name is a string, :time and :c-time are floats, and :desc is a set
 (defstruct node :name :time :c-time :desc)
 
-(defn tree->seq
-  "Takes a tree and returns a seq of all the nodes in depth-first order."
+(defn tree->seq  "Takes a tree and returns a seq of all the nodes in depth-first order."
   [[n l r]]
   (if-not l
     [n]
@@ -81,7 +80,7 @@
 (defn prep-newick-str
   "To make the tree easier for parsing the commas are replaced with ')('."
   [n-str]
-  (str "(" (s/replace (s/replace n-str "," ")(") ":" " ") ")"))
+  (str "(" (str/replace (str/replace n-str "," ")(") ":" " ") ")"))
 
 (defn build-tree-from-newick-str
   "Parses s and builds a binary tree structure as a vector of

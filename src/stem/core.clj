@@ -1,16 +1,17 @@
 (ns stem.core
-  (:use [clojure.contrib pprint] [clojure set])
-  (:require [clojure.contrib.str-utils2 :as s]
-            [clojure.contrib.seq-utils :as s-utils]
-            [stem.newick :as newick]
+  (:use [clojure.pprint] [clojure set])
+  (:require [stem.newick :as newick]
             [stem.gene-tree :as g-tree]
             [stem.util :as util]
             [stem.messages :as m]
             [stem.mle :as mle]
+            [clojure.string :as str]
             [clojure.contrib.combinatorics :as comb])
   (:import [java.io BufferedReader FileReader]
            [org.yaml.snakeyaml Yaml])
   (:gen-class))
+
+(def *stem-version* 2.0)
 
 ;; if this value is true, then a caught exception will exit the
 ;; system.  If in dev, we don't want it to exit since it destroys the
@@ -18,6 +19,11 @@
 ;; uber jar
 (def in-production? false)
 
+
+(defmacro with-exc [body message]
+  `(try
+    ~body
+    (catch Exception e# (util/abort ~message e#))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; functions to build up species and lineage maps and indexes into
 ;; maps
@@ -30,17 +36,18 @@
   :properties = a map with user configurable properties"
   ([] (parse-settings-file (util/get-settings-filename)))
   ([file-name]
-  (let [yaml (Yaml.)
-        yaml-map (.load yaml (slurp file-name))]
-    (zipmap (map keyword (.keySet yaml-map))
-            (map #(into {} %) (.values yaml-map))))))
+     (let [f (if (nil? file-name) (util/get-settings-filename) file-name)
+           yaml (Yaml.)
+           yaml-map (with-exc (.load yaml (slurp f)) m/yaml-message)]
+       (zipmap (map keyword (.keySet yaml-map))
+               (map #(into {} %) (.values yaml-map))))))
 
 (defn build-lin-to-spec-map
   "From the generic property map, builds the lineages to species map"
   [props]
   (reduce
    (fn [m [k v]]
-     (let [lins  (s/split (util/remove-whitespace v) #",")]
+     (let [lins  (str/split (util/remove-whitespace v) #",")]
        (merge m (zipmap lins (repeat k)))))
    {} (:species props)))
 
@@ -48,7 +55,7 @@
   [props]
   (reduce
    (fn [m [k v]]
-     (let [lins  (s/split (util/remove-whitespace v) #",")]
+     (let [lins  (str/split (util/remove-whitespace v) #",")]
        (merge m {k (set lins)})))
    {} (:species props)))
 
@@ -199,7 +206,7 @@
   the tree should be built, with some nodes having the same coalescent time.
   Find all permutations of this list, thus finding all ml trees"
   [lst]
-  (apply comb/cartesian-product (vals (s-utils/group-by first lst))))
+  (apply comb/cartesian-product (vals (group-by first lst))))
 
 (defn tree-from-seq [s]
   (reduce #(find-and-merge-nodes %1 %2) {} s))
@@ -212,18 +219,70 @@
     (catch Exception e#
       (util/abort ~e-message e# ~in-production?))))
 
+(defprotocol JobProtocol
+  (pre-run-check [job])
+  (print-job [job])
+  (run [job])
+  (print-results [job])
+  (print-results-to-file [job filename]))
+
+(defrecord MLEJob [props env gene-trees results]
+  JobProtocol
+  (pre-run-check
+   [job]
+   (let [{:keys [props env gene-trees]} job]
+     (doseq [k [:theta :lin-set :spec-set]]
+       (util/abort-if-empty (env k) (m/e-strs k) true)))
+   job)
+
+  (print-job
+   [job]
+   (m/print-job job)
+   job)
+  
+  (run
+   [job]
+   (let [{:keys [props env gene-trees]} job
+         gene-matrices  (gene-trees-to-matrices gene-trees (env :lin-to-index))
+         min-gene-matrix (reduce reduce-matrices (util/make-stem-array (env :mat-size)) gene-matrices)
+         spec-matrix (to-spec-matrix min-gene-matrix env)
+         spec-lst (matrix->sorted-list spec-matrix (env :index-to-spec))
+         lst-of-perm (get-list-permutations spec-lst)
+         [tree-set tree] (first (tree-from-seq spec-lst))
+         species-newick (newick/tree->newick-str tree)
+         species-vec-tree (newick/build-tree-from-newick-str species-newick 1.0 1.0)
+         mle (mle/calc-mle gene-trees species-vec-tree (env :spec-to-lin) (env :theta))
+         res {:tied-trees lst-of-perm, :species-tree species-newick, :mle mle}]
+     (assoc job :results res)))
+  
+  (print-results
+   [job]
+   (m/print-job-results (:results job))
+   job)
+  
+  (print-results-to-file
+   [job filename]
+   (util/write-to-file filename ((job :results) :species-tree))
+   job))
+
+   
+
+(defrecord SearchJob [props env gene-trees results])
+(defrecord UserTreeJob [props env gene-trees results])
+
 (defn create-env
   "This functions return a hashmap of all of the various data-structures that are necessary
   to generate species trees and their likelihoods"
   [settings-map]
   (let [lin-to-spec (build-lin-to-spec-map settings-map)
         spec-to-lin (build-spec-to-lin-map settings-map)
-        lin-set (with-eval-and-out (set (keys lin-to-spec)) m/lin-set-message "")
-        spec-set (with-eval-and-out (set (vals lin-to-spec)) m/spec-set-message "")
+        lin-set (set (keys lin-to-spec))
+        spec-set (set (vals lin-to-spec))
         spec-to-index (create-name-to-index-map spec-set)
         index-to-spec (zipmap (vals spec-to-index) (keys spec-to-index))        
         lin-to-index (create-name-to-index-map lin-set)]
-    {:lin-to-spec lin-to-spec
+    {:theta ((:properties settings-map) "theta")
+     :lin-to-spec lin-to-spec
      :spec-to-lin spec-to-lin
      :lin-set lin-set
      :spec-set spec-set
@@ -232,25 +291,20 @@
      :lin-to-index lin-to-index
      :mat-size (count lin-set)}))
 
+(defn create-job [& file]
+  (let [{:keys [properties files species] :as s}
+        (parse-settings-file (first file))
+        env (create-env s)
+        gene-trees (g-tree/get-gene-trees files (env :theta))]
+    (case (properties "run")
+          "0" (UserTreeJob. properties env gene-trees nil)
+          "2" (SearchJob. properties env gene-trees nil)
+          (MLEJob. properties env gene-trees nil))))
 
 (defn -main
   "Entry point for STEM 2.0. Throughout the code, lin refers to lineages, and spec refers
   to species."
   [& args]
-  (let [settings (with-eval-and-out (parse-settings-file) m/yaml-message (m/e-strs :yaml))
-        theta (with-eval-and-out ((:properties settings) "theta") m/theta-message "")
-        env (create-env settings)
-        gene-trees (g-tree/get-gene-trees (:files settings) theta)
-        gene-matrices  (gene-trees-to-matrices gene-trees (env :lin-to-index))
-        min-gene-matrix (reduce reduce-matrices (util/make-stem-array (env :mat-size)) gene-matrices)
-        spec-matrix (to-spec-matrix min-gene-matrix env)
-        spec-lst (matrix->sorted-list spec-matrix (env :index-to-spec))
-        lst-of-perm (get-list-permutations spec-lst)
-        [tree-set tree] (first (tree-from-seq spec-lst))
-        species-newick (with-eval-and-out
-                         (newick/tree->newick-str tree) m/spec-newick-message "" (count lst-of-perm))
-        species-vec-tree (newick/build-tree-from-newick-str species-newick 1.0 1.0)
-        mle (with-eval-and-out (mle/calc-mle gene-trees species-vec-tree (env :spec-to-lin) theta)
-              m/mle-message "")]
-    (util/write-to-file "mletree.tre" species-newick))
+  (m/header-message)
+  (-> (create-job) (run))
   (if in-production? (System/exit 0)))

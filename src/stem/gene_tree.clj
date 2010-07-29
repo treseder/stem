@@ -1,7 +1,7 @@
 (ns stem.gene-tree
   (:require [stem.util :as util]
             [stem.newick :as newick]
-            [clojure.contrib.str-utils2 :as s]))
+            [clojure.string :as str]))
 
 (defstruct gene-tree :vec-tree :rate)
 
@@ -35,7 +35,7 @@
   "Returns a sequence of gene-tree structs found in file-name"
   [file-name theta & [rate]]
   (let [file-str (util/remove-whitespace (slurp file-name))
-        newick-strs (s/split file-str #";")]
+        newick-strs (str/split file-str #";")]
     (map #(parse-gene-tree-str % theta rate) newick-strs)))
 
 (defn get-gene-trees [file-map, theta]

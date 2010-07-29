@@ -1,6 +1,5 @@
 (ns stem.util
-  (:require [clojure.contrib.str-utils2 :as s]
-            [clojure.contrib.duck-streams :as duck])
+  (:require [clojure.string :as str])
   (:import [java.io File StringReader BufferedReader]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -20,6 +19,22 @@
     (println (.getMessage e)))
   (if exit? (System/exit 1)))
 
+(defmulti abort-if-empty
+  (fn [v m exit?]
+    (class v)))
+
+(defmethod abort-if-empty java.lang.String
+  [v message exit?]
+  (when (= v "") (abort message nil exit?)))
+
+(defmethod abort-if-empty java.lang.Number
+  [v message exit?])
+
+(defmethod abort-if-empty :default
+  [v message exit?]
+  (if (or (nil? v) (empty? v))
+    (abort message nil exit?)))
+
 (defmulti to-double class)
 
 (defmethod to-double clojure.lang.Keyword [k-word]
@@ -31,8 +46,11 @@
 (defmethod to-double java.lang.Integer [i]
   (double i))
 
+(defmethod to-double java.lang.Double [i]
+  i)
+
 (defn write-to-file [f str]
-  (duck/spit f str))
+  (spit f str))
 
 (defn get-file
   [f-name]
@@ -55,7 +73,7 @@
 
 
 (defn remove-whitespace [s]
-  (s/replace s #"\s" ""))
+  (str/replace s #"\s" ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; multi-dim array functions

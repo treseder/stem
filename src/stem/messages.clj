@@ -3,12 +3,37 @@
             [clojure.contrib.seq-utils :as s-utils]
             [stem.util :as util]))
 
-(def e-strs {:yaml "An error occurred parsing the settings file."})
+(def e-strs {:yaml "An error occurred parsing the settings file."
+             :theta "A value for theta must be present in the settings file."
+             :lin-set "At least one species to lineage mapping must be present in the settings file"
+             :spec-set "At least one species to lineage mapping must be present in the settings file"})
+
+(def yaml-message "An error occurred parsing the settings file.")
 
 (defmacro println-if [test form]
   `(if ~test
     (println ~form)
     (flush)))
+
+(defn print-job-results [{:keys [tied-trees species-tree mle]}]
+  (let [tt (count tied-trees)]
+    (println "\n****************Results*****************")
+    (println (str "\nLikelihood Species Tree (newick format):\n\n" species-tree))
+    (println-if (> tt 1) (str "\nNote: There were " tt " trees that have the same likelihood estimate as the tree above.  These trees will be output to the 'stem-tree.tre' file."))
+    (println (str "\nLikelihood estimate for tree: " mle))))
+
+(defn header-message [version]
+  (println      "***************************************")
+  (println (str "**        Welcome to STEM " version "        **"))
+  (println      "***************************************\n")
+  (flush))
+
+(defn print-job [{:keys [props env gene-trees]}]
+  (println "\nThe settings file was successfully parsed...\n")
+  (println (str "Using theta = " (env :theta) "\n"))
+  (println (str "The settings file contained " (count (env :spec-set)) " species and " (count (env :lin-set)) " lineages.\n"))
+  (println "The species to lineage mappings are:\n")
+  (doseq [[k v] (env :spec-to-lin)] (println (str k ": " (apply str (interpose ", " v))))))
 
 (defn yaml-message [prop-map]
   (println "Successfully parsed the settings file")
@@ -31,7 +56,7 @@
   (println "The Maximum Likelihood tree (written to file 'mle.tre') is:")
   (println)
   (println s)
-  (println-if (> num-trees 1) (str "There were also " num-trees " trees that have the same likelihood estimate as the tree above.\nThese trees are also output to 'mle.tre'."))
+  (println-if (> num-trees 1) (str "\nThere were also " num-trees " trees that have the same likelihood estimate as the tree above.\nThese trees are also output to 'mle.tre'."))
   (flush))
 
 (defn mle-message [mle]
