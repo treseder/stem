@@ -9,6 +9,7 @@
 
   The library also contains a function to draw an ascii representation of the
   tree"
+  (:use     [clojure.pprint])
   (:require [clojure.string :as str]
             [stem.util :as util]
             [clojure.set :as c-set]
@@ -20,6 +21,7 @@
 
 ;; :name is a string, :time and :c-time are floats, and :desc is a set
 (defstruct node :name :time :c-time :desc)
+(defrecord Node [name time c-time desc])
 
 (defn tree->seq  "Takes a tree and returns a seq of all the nodes in depth-first order."
   [[n l r]]
@@ -27,14 +29,21 @@
     [n]
     (lazy-cat (tree->seq l) (tree->seq r) [n])))
 
+(defn make-precise [num]
+  (-> num (format-time) (util/to-double)))
+
+(defn format-time [time]
+;  (swank.core/break)
+  (cl-format nil "~,5f" time))
+
 (defn zero->tiny-num
   "Zero times aren't really valid, but sometimes users include them; change
   to very small number "
   [num]
-  (if (zero? num) 0.000001 num))
+  (if (zero? num) 0.00001 num))
 
 (defn create-node [n time c-time desc-set]
-  (struct node (.trim n) time c-time desc-set))
+  (Node. (.trim n) (make-precise time) (make-precise c-time) desc-set))
 
 (defn is-leaf? [node]
   (let [[s left right] node] (nil? left)))
@@ -90,7 +99,7 @@
   have a number, but need not be named."
   [s rate theta]
   (try
-   (let [prepped-str (prep-newick-str s)
+     (let [prepped-str (prep-newick-str s)
          divisor (* rate theta)
          lst (read-string prepped-str)
          left (build-tree (first lst) divisor)
@@ -106,9 +115,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn rec-tree->newick-str [node p-time]
     (if (is-leaf? node)
-      (str (first node) ":"  (format "%1.6f" p-time))
+      (str (first node) ":"  (format-time p-time))
       (let [[time l r] node]
-        (str "(" (rec-tree->newick-str l time) ","  (rec-tree->newick-str r time) ")" ":" (- p-time time) ))))
+        (str "(" (rec-tree->newick-str l time) ","
+             (rec-tree->newick-str r time) ")" ":"
+             (format-time (- p-time time))))))
 
 (defn tree->newick-str [tree]
   (let [[n l r] tree]
@@ -117,10 +128,11 @@
 ;;;;;;;;;;;;;;;;;;
 ;; drawing trees
 ;;;;;;;;;;;;;;;;;;
+
 (defn node-to-str [n]
   (let [[m left right] n
         name (if (is-leaf? n) (str (:name m) ":") "")]
-    (str name (format "%1.6f" (:c-time m)))))
+    (str name (format "%1.5f" (:c-time m)))))
 
 (defn create-drawable-tree [node]
   (let [[m left right] node
@@ -129,12 +141,11 @@
       [d-name]
       [d-name (create-drawable-tree left) (create-drawable-tree right)])))
 
-(defn see-newick-tree [vec-tree]
+(defn see-newick-tree [n-str]
+  (-> n-str (build-tree-from-newick-str 1 1) (see-vector-tree)))
+
+(defn see-vector-tree [vec-tree]
   (vij/draw-binary-tree (create-drawable-tree vec-tree)))
 
 (defn see-tree [vec-tree]
   (vij/draw-binary-tree vec-tree))
-
-
-(def ntree-6 "(Species6:6.303000,((Species1:3.052820,Species5:3.052820):1.143503,(Species2:2.023739,(Species3:1.117750,Species4:1.117750):0.905989):2.172584):2.106677)")
-

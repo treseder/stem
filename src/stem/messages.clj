@@ -6,9 +6,8 @@
 (def e-strs {:yaml "An error occurred parsing the settings file."
              :theta "A value for theta must be present in the settings file."
              :lin-set "At least one species to lineage mapping must be present in the settings file"
-             :spec-set "At least one species to lineage mapping must be present in the settings file"})
-
-(def yaml-message "An error occurred parsing the settings file.")
+             :spec-set "At least one species to lineage mapping must be present in the settings file"
+             :missing-lin "A lineage encountered in the genetree file was not present in the settings file: "})
 
 (defmacro println-if [test form]
   `(if ~test
@@ -17,7 +16,7 @@
 
 (defn print-job-results [{:keys [tied-trees species-tree mle]}]
   (let [tt (count tied-trees)]
-    (println "\n****************Results*****************")
+    (println "\n\n****************Results*****************")
     (println (str "\nLikelihood Species Tree (newick format):\n\n" species-tree))
     (println-if (> tt 1) (str "\nNote: There were " tt " trees that have the same likelihood estimate as the tree above.  These trees will be output to the 'stem-tree.tre' file."))
     (println (str "\nLikelihood estimate for tree: " mle))))
@@ -29,10 +28,10 @@
   (flush))
 
 (defn print-job [{:keys [props env gene-trees]}]
-  (println "\nThe settings file was successfully parsed...\n")
+  (println "The settings file was successfully parsed...\n")
   (println (str "Using theta = " (env :theta) "\n"))
   (println (str "The settings file contained " (count (env :spec-set)) " species and " (count (env :lin-set)) " lineages.\n"))
-  (println "The species to lineage mappings are:\n")
+  (println "The species-to-lineage mappings are:\n")
   (doseq [[k v] (env :spec-to-lin)] (println (str k ": " (apply str (interpose ", " v))))))
 
 (defn yaml-message [prop-map]

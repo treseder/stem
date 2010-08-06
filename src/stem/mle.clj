@@ -43,7 +43,7 @@
                         (calc-mle-for-coalescent-event
                          rem-num-lins two-div-theta last-c-time end true)), rem-num-lins]
                     [cum-mle, rem-num-lins])]
-      (println (str "return mle for branch: " ret-mle))
+      ;(println (str "return mle for branch: " ret-mle))
       ret-mle)))
 
 (defn calc-mle-for-branches
@@ -57,6 +57,7 @@
       (let [cum-lins (spec-to-lin (:name n))]
         [1 cum-lins (count cum-lins) 0])
       (let [end-time (:c-time n)
+            ;; depth traversal - gets to bottom of tree and works up
             [l-cum-mle l-lins l-num-lins l-time] (calc-mle-for-branches l coal-nodes spec-to-lin two-div-theta)
             [r-cum-mle r-lins r-num-lins r-time] (calc-mle-for-branches r coal-nodes spec-to-lin two-div-theta)
             ;; calculating the two branches from this node to its two descendents
@@ -71,8 +72,10 @@
   "All nodes of the tree except the leaves are returned, ordered by coalescent time.
   These nodes represent the coalescent events of the gene tree."
   [tree]
-  (sort-by #(% :c-time)
-           (filter #(not-empty (% :desc)) (newick/tree->seq tree))))
+  (sort-by #(:c-time %)
+           (filter #(not-empty (:desc %)) (newick/tree->seq tree))))
+
+(def counter (let [count (ref 0)] #(dosync (alter count inc))))
 
 (defn calc-mle-for-tree
   "Calculates the maximum likelihood estimate given a
@@ -86,6 +89,7 @@
                                                  num-lins end-time
                                                  Double/POSITIVE_INFINITY
                                                  two-div-theta)]
+    ;(println (str "MLE for tree " (counter) " is " (* tree-mle before-tree-mle)))
     (* tree-mle before-tree-mle)))
 
 (defn calc-mle

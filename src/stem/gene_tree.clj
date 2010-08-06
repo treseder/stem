@@ -3,13 +3,14 @@
             [stem.newick :as newick]
             [clojure.string :as str]))
 
-(defstruct gene-tree :vec-tree :rate)
+(defrecord GeneTree [vec-tree rate])
+
 
 (defn create-gene-tree
   "The struct that holds the tree structure of the gene-tree
   and its rate (double)"
   [vec-tree rate]
-  (struct gene-tree vec-tree rate))
+  (GeneTree. vec-tree rate))
 
 (defn parse-rate-and-tree [s]
   "s could be of the form

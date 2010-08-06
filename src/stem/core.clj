@@ -23,7 +23,7 @@
 (defmacro with-exc [body message]
   `(try
     ~body
-    (catch Exception e# (util/abort ~message e#))))
+    (catch Exception e# (util/abort ~message e# ~in-production?))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; functions to build up species and lineage maps and indexes into
 ;; maps
@@ -38,7 +38,7 @@
   ([file-name]
      (let [f (if (nil? file-name) (util/get-settings-filename) file-name)
            yaml (Yaml.)
-           yaml-map (with-exc (.load yaml (slurp f)) m/yaml-message)]
+           yaml-map (with-exc (.load yaml (slurp f)) (m/e-strs :yaml))]
        (zipmap (map keyword (.keySet yaml-map))
                (map #(into {} %) (.values yaml-map))))))
 
@@ -77,20 +77,25 @@
   (map index-map lins))
 
 (defn fill-matrix-for-lineage
-  [i js matrix c-time]
-  (doseq [j js]
-    (if (> i j) ;; matrix is symmetric - only fill half
-      (util/aset! matrix j i c-time)
-      (util/aset! matrix i j c-time))))
+  [i-idx j-idxs matrix c-time]
+  (doseq [j-idx j-idxs]
+    (if (> i-idx j-idx) ;; matrix is symmetric - only fill half
+      (util/aset! matrix j-idx i-idx c-time)
+      (util/aset! matrix i-idx j-idx c-time))))
+
+(defn check-lin [idx name]
+  (if (nil? idx) (util/abort (str (m/e-strs :missing-lin) name) nil in-production?))
+  idx)
 
 (defn rec-fill-time-matrix
   [node matrix lin-index parent-desc-set parent-c-time]
   (let [[{name :name  desc-set :desc c-time :c-time} l-node r-node] node
         ;; if leaf consider self the only desc
-        checked-set (if (empty? desc-set) #{name} desc-set)
-        diff-set (difference parent-desc-set checked-set)
+        checked-desc-set (if (empty? desc-set) #{name} desc-set)
+        diff-set (difference parent-desc-set checked-desc-set)
         js (name->indexes diff-set lin-index)]
-    (doseq [i checked-set] (fill-matrix-for-lineage (lin-index i) js matrix parent-c-time))
+    (doseq [i checked-desc-set]
+      (fill-matrix-for-lineage (check-lin (lin-index i) i) js matrix parent-c-time))
     (if-not (newick/is-leaf? node)
       (do (rec-fill-time-matrix l-node matrix lin-index desc-set c-time)
           (rec-fill-time-matrix r-node matrix lin-index desc-set c-time)))))
@@ -99,7 +104,7 @@
   "Returns a matrix filled with coalescent times for each of the lineages.
   The matrix is upper triangular."
   [tree matrix lin-index]
-  (rec-fill-time-matrix tree matrix lin-index ((first tree) :desc) 0)
+  (rec-fill-time-matrix tree matrix lin-index (:desc (first tree)) 0)
   matrix)
 
 (defn gene-trees-to-matrices
@@ -157,6 +162,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; functions for generating newick str from species matrix;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn sort-vec-of-vec [coll]
+  (sort #(compare (first %1) (first %2)) coll))
+
+(defn get-list-permutations
+  "The list of nodes used to build the ml species tree contains ties in how
+  the tree should be built, with some nodes having the same coalescent time.
+  Find all permutations of this list, thus finding all ml trees"
+  [lst]
+  (apply comb/cartesian-product (vals (group-by first lst))))
+
 (defn matrix->sorted-list
   "Returns a list sorted by elements of the matrix.
   Assumes matrix is upper triangular where diag elements are zero"
@@ -201,13 +216,6 @@
             (assoc new-descs comb-tree)))
       node-map)))
 
-(defn get-list-permutations
-  "The list of nodes used to build the ml species tree contains ties in how
-  the tree should be built, with some nodes having the same coalescent time.
-  Find all permutations of this list, thus finding all ml trees"
-  [lst]
-  (apply comb/cartesian-product (vals (group-by first lst))))
-
 (defn tree-from-seq [s]
   (reduce #(find-and-merge-nodes %1 %2) {} s))
 
@@ -232,7 +240,7 @@
    [job]
    (let [{:keys [props env gene-trees]} job]
      (doseq [k [:theta :lin-set :spec-set]]
-       (util/abort-if-empty (env k) (m/e-strs k) true)))
+       (util/abort-if-empty (env k) (m/e-strs k) in-production?)))
    job)
 
   (print-job
@@ -265,13 +273,11 @@
    (util/write-to-file filename ((job :results) :species-tree))
    job))
 
-   
-
 (defrecord SearchJob [props env gene-trees results])
 (defrecord UserTreeJob [props env gene-trees results])
 
 (defn create-env
-  "This functions return a hashmap of all of the various data-structures that are necessary
+  "This function returns a hashmap of all of the various data-structures that are necessary
   to generate species trees and their likelihoods"
   [settings-map]
   (let [lin-to-spec (build-lin-to-spec-map settings-map)
@@ -305,6 +311,6 @@
   "Entry point for STEM 2.0. Throughout the code, lin refers to lineages, and spec refers
   to species."
   [& args]
-  (m/header-message)
-  (-> (create-job) (run))
+  (m/header-message *stem-version*)
+  (-> (create-job) (pre-run-check) (print-job) (run) (print-results))
   (if in-production? (System/exit 0)))
