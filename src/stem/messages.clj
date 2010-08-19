@@ -7,7 +7,9 @@
              :theta "A value for theta must be present in the settings file."
              :lin-set "At least one species to lineage mapping must be present in the settings file"
              :spec-set "At least one species to lineage mapping must be present in the settings file"
-             :missing-lin "A lineage encountered in the genetree file was not present in the settings file: "})
+             :missing-lin "A lineage encountered in the genetree file was not present in the settings file: "
+             :properties "The properties section is missing from the settings file."
+             :species "The species section is missing from the settings file."})
 
 (defmacro println-if [test form]
   `(if ~test

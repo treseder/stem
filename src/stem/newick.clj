@@ -9,32 +9,29 @@
 
   The library also contains a function to draw an ascii representation of the
   tree"
-  (:use     [clojure.pprint])
+  (:use     [clojure.pprint] [stem.constants])
   (:require [clojure.string :as str]
             [stem.util :as util]
             [clojure.set :as c-set]
             [vijual :as vij]))
 
-
-(def *internal-node-name* "internal")
-(def *root-name* "stem-root")
-
 ;; :name is a string, :time and :c-time are floats, and :desc is a set
-(defstruct node :name :time :c-time :desc)
 (defrecord Node [name time c-time desc])
+
+;; counter to uniquely identify internal nodes
+(def i-node-counter (util/make-counter 0))
 
 (defn tree->seq  "Takes a tree and returns a seq of all the nodes in depth-first order."
   [[n l r]]
   (if-not l
     [n]
     (lazy-cat (tree->seq l) (tree->seq r) [n])))
-
-(defn make-precise [num]
-  (-> num (format-time) (util/to-double)))
-
 (defn format-time [time]
 ;  (swank.core/break)
   (cl-format nil "~,5f" time))
+
+(defn make-precise [num]
+  (-> num (format-time) (util/to-double)))
 
 (defn zero->tiny-num
   "Zero times aren't really valid, but sometimes users include them; change
@@ -80,7 +77,7 @@
           c-time (max-c-time left right)
           desc-set (merge-desc left right)]
       ;; internal node
-      [(create-node *internal-node-name*
+      [(create-node (str *internal-node-name* ((i-node-counter :next)))
                     (/ (zero->tiny-num t) div)
                     (zero->tiny-num c-time)
                     desc-set)
@@ -98,6 +95,7 @@
   name:number, where number is optional.  All interior nodes must
   have a number, but need not be named."
   [s rate theta]
+  ((i-node-counter :reset)) ; resets counter for each tree parsed
   (try
      (let [prepped-str (prep-newick-str s)
          divisor (* rate theta)
@@ -141,11 +139,11 @@
       [d-name]
       [d-name (create-drawable-tree left) (create-drawable-tree right)])))
 
-(defn see-newick-tree [n-str]
-  (-> n-str (build-tree-from-newick-str 1 1) (see-vector-tree)))
-
 (defn see-vector-tree [vec-tree]
   (vij/draw-binary-tree (create-drawable-tree vec-tree)))
+
+(defn see-newick-tree [n-str]
+  (-> n-str (build-tree-from-newick-str 1 1) (see-vector-tree)))
 
 (defn see-tree [vec-tree]
   (vij/draw-binary-tree vec-tree))

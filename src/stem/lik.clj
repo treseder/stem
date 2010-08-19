@@ -1,6 +1,7 @@
-(ns stem.mle
-  (:use [clojure.contrib pprint] [clojure set])
+(ns stem.lik
+  (:use [clojure.contrib pprint])
   (:require [stem.newick :as newick]
+            [clojure.set :as set]
             [stem.gene-tree :as g-tree]
             [stem.util :as util]
             [clojure.contrib.combinatorics :as comb]))
@@ -29,7 +30,9 @@
   ;(println (str "lins-at-start: " num-lins-at-start))
   ;(println (str "Times: " start " " end))
   (let [coal-filter-fn (fn [{c-time :c-time c-lins :desc}]
-                         (and (>= c-time start) (< c-time end) (subset? c-lins lins-in-branch)))
+                         (and (>= c-time start)
+                              (< c-time end)
+                              (set/subset? c-lins lins-in-branch)))
         coal-events (filter coal-filter-fn coal-nodes)
         mle-fn (fn [[mle num-lins last-c-time] event]
                  [(* mle (calc-mle-for-coalescent-event num-lins two-div-theta last-c-time (:c-time event) false)),
@@ -65,7 +68,7 @@
             [r-mle r-end-lins] (calc-mle-for-branch coal-nodes r-lins r-num-lins r-time end-time two-div-theta)
             cum-mle (* l-cum-mle r-cum-mle l-mle r-mle)]
         ;(println (str "cum-mle: " l-cum-mle " " r-cum-mle " " l-mle " " r-mle " " cum-mle))
-        [cum-mle (union l-lins r-lins) (+ l-end-lins r-end-lins) end-time]))))
+        [cum-mle (set/union l-lins r-lins) (+ l-end-lins r-end-lins) end-time]))))
 
 
 (defn tree->sorted-internal-nodes

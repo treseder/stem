@@ -1,10 +1,15 @@
 (ns stem.util
+  (:use [stem.constants])
   (:require [clojure.string :as str])
   (:import [java.io File StringReader BufferedReader]))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; functions to output user information ;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defmacro with-exc [body message]
+  `(try
+    ~body
+    (catch Exception e# (stem.util/abort ~message e#))))
+
+(def not-zero? (complement zero?))
+
 (defn comma-sep [seq]
   (apply str (interpose "," seq)))
 
@@ -12,28 +17,32 @@
   (println s)
   (flush))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn abort [message e exit?]
+(defn make-counter [init-val] 
+  (let [c (atom init-val)] 
+    {:next #(swap! c inc)
+     :reset #(reset! c init-val)}))
+
+(defn abort [message e]
   (println message)
   (if-not (nil? e)
     (println (.getMessage e)))
-  (if exit? (System/exit 1)))
+  (if *in-production* (System/exit 1)))
 
 (defmulti abort-if-empty
-  (fn [v m exit?]
+  (fn [v m]
     (class v)))
 
 (defmethod abort-if-empty java.lang.String
-  [v message exit?]
-  (when (= v "") (abort message nil exit?)))
+  [v message]
+  (when (= v "") (abort message nil)))
 
 (defmethod abort-if-empty java.lang.Number
-  [v message exit?])
+  [v message])
 
 (defmethod abort-if-empty :default
-  [v message exit?]
+  [v message]
   (if (or (nil? v) (empty? v))
-    (abort message nil exit?)))
+    (abort message nil)))
 
 (defmulti to-double class)
 

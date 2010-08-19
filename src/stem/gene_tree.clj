@@ -5,7 +5,6 @@
 
 (defrecord GeneTree [vec-tree rate])
 
-
 (defn create-gene-tree
   "The struct that holds the tree structure of the gene-tree
   and its rate (double)"
