@@ -106,7 +106,7 @@
 (defn get-list-permutations
   "The list of nodes used to build the ml species tree contains ties in how
   the tree should be built, with some nodes having the same coalescent time.
-  Find all permutations of this list, thus finding all ml trees"
+  Find all permutations of this list, thus finding all tied likelihood trees"
   [lst]
   (apply comb/cartesian-product (vals (group-by first lst))))
 

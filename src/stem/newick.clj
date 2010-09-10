@@ -121,7 +121,7 @@
 
 (defn tree->newick-str [tree]
   (let [[n l r] tree]
-    (str "(" (rec-tree->newick-str l n) ","  (rec-tree->newick-str r n) ")" )))
+    (str "(" (rec-tree->newick-str l n) ","  (rec-tree->newick-str r n) ");" )))
 
 ;;;;;;;;;;;;;;;;;;
 ;; drawing trees

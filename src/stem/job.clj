@@ -42,7 +42,7 @@
          species-newick (newick/tree->newick-str tree)
          species-vec-tree (newick/build-tree-from-newick-str species-newick 1.0 1.0)
          mle (lik/calc-mle gene-trees species-vec-tree (env :spec-to-lin) (env :theta))
-         res {:tied-trees lst-of-perm, :species-tree species-newick, :mle mle}]
+         res {:tied-trees lst-of-perm, :species-matrix spec-matrix, :species-tree species-newick, :mle mle}]
      (assoc job :results res)))
   
   (print-results
