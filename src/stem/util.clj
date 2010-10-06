@@ -1,12 +1,19 @@
 (ns stem.util
   (:use [stem.constants])
   (:require [clojure.string :as str])
-  (:import [java.io File StringReader BufferedReader]))
+  (:import [java.io File StringReader BufferedReader]
+           [java.util Random]))
 
 (defmacro with-exc [body message]
   `(try
     ~body
     (catch Exception e# (stem.util/abort ~message e#))))
+
+(defn rand-generator
+  [& [seed]]
+  (let [rg (if seed (Random. seed) (Random.))]
+    (fn [& [type n]] (if (= type :int) (.nextInt rg n) (.nextDouble rg)))))
+
 
 (def not-zero? (complement zero?))
 

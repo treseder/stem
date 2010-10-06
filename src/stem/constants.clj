@@ -11,3 +11,8 @@
 (def *internal-node-name* "internal")
 (def *root-name* "stem-root")
 
+(def *num-saved-trees-default* 10)
+(def *burnin-default* 100)
+(def *beta-default* 0.0005)
+(def *bound-total-iter-default* 300)
+

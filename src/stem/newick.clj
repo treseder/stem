@@ -1,10 +1,10 @@
 (ns stem.newick
   "Provides functions that parse newick formatted strings and build a binary
   tree with the following structure:
-  [{:name :time :c-time :desc} [...] [...]]
+  [{:name :b-len :c-time :desc} [...] [...]]
 
   :name name of node (leaf names from newick, internal nodes are 'internal')
-  :time float of elapsed time to ancestor (obtained from newick)
+  :b-len branch length - float of elapsed time to ancestor (obtained from newick)
   :descendents a set of all node's descendents
 
   The library also contains a function to draw an ascii representation of the
@@ -16,7 +16,7 @@
             [vijual :as vij]))
 
 ;; :name is a string, :time and :c-time are floats, and :desc is a set
-(defrecord Node [name time c-time desc])
+(defrecord Node [name b-len c-time desc])
 
 ;; counter to uniquely identify internal nodes
 (def i-node-counter (util/make-counter 0))
@@ -39,8 +39,8 @@
   [num]
   (if (zero? num) 0.00001 num))
 
-(defn create-node [n time c-time desc-set]
-  (Node. (.trim n) (make-precise time) (make-precise c-time) desc-set))
+(defn create-node [n b-len c-time desc-set]
+  (Node. (.trim n) (make-precise b-len) (make-precise c-time) desc-set))
 
 (defn is-leaf? [node]
   (let [[s left right] node] (nil? left)))
@@ -50,8 +50,8 @@
   [n1 n2]
   (let [[node1 _ _] n1
         [node2 _ _] n2
-        t1 (+ (:time node1) (:c-time node1))
-        t2 (+ (:time node2) (:c-time node2))]
+        t1 (+ (:b-len node1) (:c-time node1))
+        t2 (+ (:b-len node2) (:c-time node2))]
     (max t1 t2)))
 
 (defn merge-desc
@@ -77,7 +77,7 @@
           c-time (max-c-time left right)
           desc-set (merge-desc left right)]
       ;; internal node
-      [(create-node (str *internal-node-name* ((i-node-counter :next)))
+      [(create-node (str *internal-node-name* "-" ((i-node-counter :next)))
                     (/ (zero->tiny-num t) div)
                     (zero->tiny-num c-time)
                     desc-set)
@@ -97,7 +97,7 @@
   [s rate theta]
   ((i-node-counter :reset)) ; resets counter for each tree parsed
   (try
-     (let [prepped-str (prep-newick-str s)
+   (let [prepped-str (prep-newick-str (str/replace s ";" ""))
          divisor (* rate theta)
          lst (read-string prepped-str)
          left (build-tree (first lst) divisor)
@@ -106,18 +106,18 @@
          desc-set (merge-desc left right)]
      [(create-node *root-name* 0.0 c-time desc-set) left right])
    (catch Exception e
-     (util/abort "An error occured parsing the newick string" e false))))
+     (util/abort "An error occured parsing the newick string" e))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; functions to generate newick-str from tree ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn rec-tree->newick-str [node p-time]
-    (if (is-leaf? node)
-      (str (first node) ":"  (format-time p-time))
-      (let [[time l r] node]
-        (str "(" (rec-tree->newick-str l time) ","
-             (rec-tree->newick-str r time) ")" ":"
-             (format-time (- p-time time))))))
+  (if (is-leaf? node)
+    (str (first node) ":"  (format-time p-time))
+    (let [[time l r] node]
+      (str "(" (rec-tree->newick-str l time) ","
+           (rec-tree->newick-str r time) ")" ":"
+           (format-time (- p-time time))))))
 
 (defn tree->newick-str [tree]
   (let [[n l r] tree]
@@ -128,9 +128,8 @@
 ;;;;;;;;;;;;;;;;;;
 
 (defn node-to-str [n]
-  (let [[m left right] n
-        name (if (is-leaf? n) (str (:name m) ":") "")]
-    (str name (format "%1.5f" (:c-time m)))))
+  (let [[m left right] n]
+    (str (str (:name m) ":") (format "%1.5f" (:c-time m)))))
 
 (defn create-drawable-tree [node]
   (let [[m left right] node

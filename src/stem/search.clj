@@ -6,6 +6,34 @@
              [stem.newick :as n]
              [clojure.zip :as z]))
 
+(defn change-time-for-node [loc parent-loc epsilon]
+  (let [[{name :name c-time :c-time :as node desc :desc}] (z/node loc)
+        [{pc-time :c-time}] (z/node parent-loc)]
+    (if (or (zero? c-time) (> pc-time c-time))
+      loc
+      (z/replace loc (vec (cons (n/create-node name epsilon (- pc-time epsilon) desc) (z/children loc)))))))
+
+(defn make-fix-tree-node [node children]
+;  (println (str "node=====" node))
+;  (println "children=====" )
+;  (doseq [c children] (println c))
+;  (println (str "branch-node=====" (vec (cons (first node) children))))
+  (vec (cons (first node) children)))
+
+(defn fix-tree-times
+  "After a tree has been changed, it's possible that a parent node has a smaller
+  coalescent time than its children, which in reality is not possible.  This function
+  fixes the tree so that all descendents have slightly smaller coalescent times than
+  their parent"
+  [tree]
+  (let [make-node #(vec (cons %1 %2))]
+    (loop [loc (z/zipper second rest make-fix-tree-node tree)]
+      (if (z/end? loc)
+        (z/root loc)
+        (recur (z/next
+                (if-let [parent (z/up loc)]
+                  (change-time-for-node loc parent 0.00005)
+                  loc)))))))
 
 (defn find-target-node
   [zipped-tree target-name]
@@ -32,14 +60,14 @@
         child-node (if left-child? (first children) (second children))
         to-child-loc (if left-child? z/down #(-> % (z/down) (z/right)))]
     (-> loc (to-child-loc) (z/replace sib-node)
-        (z/up) (to-sib-loc) (z/replace child-node) (z/root))))
+        (z/up) (to-sib-loc) (z/replace child-node) (z/root) (fix-tree-times))))
 
 (defn min-coal-time-for-node
   [l-specs r-specs spec-mat spec-to-idx]
   (reduce min
    (for [l-spec l-specs r-spec r-specs]
-     (let [i (l-spec spec-to-idx)
-           j (r-spec spec-to-idx)]
+     (let [i (spec-to-idx l-spec)
+           j (spec-to-idx r-spec)]
        (if (< i j)
          (u/aget! spec-mat i j)
          (u/aget! spec-mat j i))))))
@@ -49,20 +77,24 @@
   changed parent nodes.  Each new node needs the minimum time of the pairs of species
   from each branch, along with the new descendent set."
   [spec-mat spec-to-idx node children]
-  (println (str "making node with... " node))
-  (let [r-specs (:desc (first (second children)))
-        l-specs (:desc (first (first children)))
+  (println (str "Make node:\n" node))
+  (println (str "children:\n" (first children) "\n" (second children)))
+  (let [[[{l-name :name l-descs :desc lc-time :c-time}] [{r-name :name r-descs :desc rc-time :c-time}]] children
+        r-specs (if-not (empty? r-descs) r-descs #{r-name})
+        l-specs (if-not (empty? l-descs) l-descs #{l-name})
+        c-time  (min-coal-time-for-node l-specs r-specs spec-mat spec-to-idx)
         new-node (n/create-node (:name (first node))
-                                (min-coal-time-for-node l-specs r-specs spec-mat spec-to-idx)
-                                0.0
-                                (union r-descs l-descs))]
-      (vec (cons new-node children))))
+                                (- c-time lc-time)  
+                                c-time
+                                (union r-specs l-specs))]
+    (println new-node)
+    (vec (cons new-node children))))
 
 (defn permute-tree
-  [s-vec-tree make-node-fn num-i-nodes]
+  [s-vec-tree make-node-fn num-i-nodes rand-fun]
   (let [zipped-tree (z/zipper second rest make-node-fn s-vec-tree)
         ;; chooses random internal node as target
-        target-name (str *internal-node-name* "-" (+ (rand-int num-i-nodes) 1))
+        target-name (str *internal-node-name* "-" (+ (rand-fun :int num-i-nodes) 1))
         target-loc (find-target-node zipped-tree target-name)
         target-sib-node (get-sib-node target-loc)
         ;; if rand num = 1 changes left child, else right child
@@ -72,39 +104,44 @@
 
 (defn keep-tree?
   "Even if the lik is less than the previous lik, still keep the tree
-  based on a certain probability to get out of local minimums"
-  [prev-lik lik i c0 beta]
-  (-> (- lik prev-lik)
-      (/ (/ c0 (+ 1 (* i beta))))
-      (Math/exp)
-      (> (rand))))
+  based on a certain probability (to overcome local minimums)"
+  [prev-lik lik i c0 beta rand-fun]
+  (let [tree-prob (-> (- lik prev-lik) (/ (/ c0 (+ 1 (* i beta)))) (Math/exp))]
+    (> tree-prob (rand-fun))))
 
 (defn maybe-add-to-best
   [lik tree trees keep-n]
-  (let [[min-lik min-tree :as min-entry] (first (last trees))]
-    (cond (< (count trees) keep-n) (conj! trees [lik tree])
-          (> lik min-lik) (-> (conj! trees [lik tree]) (disj! min-entry))
-          trees)))
+  (let [[min-lik min-tree :as min-entry] (last trees)]
+    (cond (< (count trees) keep-n) (conj trees [lik tree])
+          (> lik min-lik) (-> (conj trees [lik tree]) (disj min-entry))
+          :default trees)))
 
 (defn search-for-trees
-  [s-vec-tree gene-trees spec-to-lin spec-matrix spec-to-idx props iters num-trees-to-save]
-  (let [make-node-fn (partial make-node spec-matrix spec-to-idx)
-        int-node-cnt (- (count spec-to-idx) 2)
-        theta (:theta props)
-        beta (:beta props)]
-   (loop [prev-lik (l/calc-mle gene-trees s-vec-tree spec-to-lin theta)
+  [s-vec-tree gene-trees spec-matrix props env]
+  (n/see-vector-tree s-vec-tree)
+  (u/print-array spec-matrix)
+  (let [make-node-fn (partial make-node spec-matrix (:spec-to-index env))
+        int-node-cnt (- (count (:spec-to-index env)) 2)
+        theta (:theta env)
+        beta (get props "beta" *beta-default*)
+        total-iters (get props "bound_total_iter" *bound-total-iter-default*)
+        burnin (get props "burnin" *burnin-default*)
+        rand-fun (u/rand-generator (props "seed"))
+        num-saved-trees (get props "num_saved_trees" *num-saved-trees-default*)]
+   (loop [prev-lik (l/calc-mle gene-trees s-vec-tree (:spec-to-lin env) theta)
           s-tree s-vec-tree
-          best-trees (transient (sorted-set))
+          best-trees (sorted-set-by #(> (first %1) (first %2)))
           c0 (* (- prev-lik) 0.25)
-          max-lik-change
+          max-lik-change 0.0
           iter 1]
-     (if (= iter iters)
-       (persistent! best-trees)
-       (let [tree (permute-tree s-tree make-node-fn int-node-cnt)
-             lik (l/calc-mle gene-trees tree spec-to-lin theta)
+     (if (= iter total-iters)
+       (take num-saved-trees best-trees)
+       (let [tree (permute-tree s-tree make-node-fn int-node-cnt rand-fun)
+             lik (l/calc-mle gene-trees tree (:spec-to-lin env) theta)
              abs-dif (Math/abs (- prev-lik lik))
-             next-c0 (if (> iter 200) max-lik-change c0)]
-         (if (or (> lik prev-lik) (keep-tree? prev-lik lik iter c0 beta))
-           (recur lik tree (maybe-add-to-best lik tree best-trees) next-c0 (max abs-dif max-lik-change) (inc iters))
-           (recur prev-lik s-tree best-trees next-c0 (max abs-dif max-lik-change) (inc iters))))))))
+             next-c0 (if (> iter burnin) max-lik-change c0)]
+         ;;(swank.core/break)
+         (if (or (> lik prev-lik) (keep-tree? prev-lik lik iter c0 beta rand-fun))
+           (recur lik tree (maybe-add-to-best lik tree best-trees num-saved-trees) next-c0 (max abs-dif max-lik-change) (inc iter))
+           (recur prev-lik s-tree best-trees next-c0 (max abs-dif max-lik-change) (inc iter))))))))
 

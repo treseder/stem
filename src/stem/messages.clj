@@ -1,4 +1,5 @@
 (ns stem.messages
+  (:use [stem.constants])
   (:require [clojure.contrib.str-utils2 :as s]
             [clojure.contrib.seq-utils :as s-utils]
             [stem.util :as util]))
@@ -16,7 +17,7 @@
     (println ~form)
     (flush)))
 
-(defn print-job-results [{:keys [tied-trees species-tree mle]}]
+(defn print-lik-job-results [{:keys [tied-trees species-tree mle]}]
   (let [tt (count tied-trees)]
     (println "\n\n****************Results*****************")
     (println (str "\nLikelihood Species Tree (newick format):\n\n" species-tree))
@@ -29,12 +30,26 @@
   (println      "***************************************\n")
   (flush))
 
-(defn print-job [{:keys [props env gene-trees]}]
+(defn print-lik-job [{:keys [props env gene-trees]}]
   (println "The settings file was successfully parsed...\n")
   (println (str "Using theta = " (env :theta) "\n"))
   (println (str "The settings file contained " (count (env :spec-set)) " species and " (count (env :lin-set)) " lineages.\n"))
   (println "The species-to-lineage mappings are:\n")
   (doseq [[k v] (env :spec-to-lin)] (println (str k ": " (apply str (interpose ", " v))))))
+
+(defn print-search-job [{:keys [props env gene-trees]}]
+  (println "The settings file was successfully parsed...\n\n")
+  (println "Setting used for STEM search:")
+  (println (str "Using beta: " (get props "beta" *beta-default*)))
+  (println (str "Using burnin: " (get props "burnin" *burnin-default*)))
+  (println (str "Using bound_total_iters: " (get props "bound_total_iter" *bound-total-iter-default*)))
+  (println (str "Using num_saved_trees:: " (get props "num_saved_trees" *num-saved-trees-default*)))
+  (println "\nBeginning search now (this could take a while)...\n"))
+
+(defn print-search-results [{:keys [best-trees]}]
+  (println "Search completed.")
+  (println "Here are the results (also written to file 'search.trees':")
+  (doseq [res best-trees] (println (str "[" (first res) "] " (second res)))))
 
 (defn yaml-message [prop-map]
   (println "Successfully parsed the settings file")

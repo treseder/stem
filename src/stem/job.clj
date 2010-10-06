@@ -5,7 +5,8 @@
             [stem.messages :as m]
             [stem.lik :as lik]
             [clojure.string :as str]
-            [stem.lik-tree :as lt])
+            [stem.lik-tree :as lt]
+            [stem.search :as s])
   (:import [java.io BufferedReader FileReader]
            [org.yaml.snakeyaml Yaml]))
 
@@ -14,9 +15,12 @@
   (pre-run-check [job])
   (print-job [job])
   (run [job])
+  (search [job])
   (print-results [job])
   (print-results-to-file [job filename]))
 
+
+(defrecord UserTreeJob [props env gene-trees results])
 (defrecord LikJob [props env gene-trees results]
   JobProtocol
   (pre-run-check
@@ -27,7 +31,7 @@
 
   (print-job
    [job]
-   (m/print-job job)
+   (m/print-lik-job job)
    job)
   
   (run
@@ -47,7 +51,7 @@
   
   (print-results
    [job]
-   (m/print-job-results results)
+   (m/print-lik-job-results results)
    job)
   
   (print-results-to-file
@@ -55,8 +59,39 @@
    (u/write-to-file filename ((job :results) :species-tree))
    job))
 
-(defrecord SearchJob [props env gene-trees results])
-(defrecord UserTreeJob [props env gene-trees results])
+(defrecord SearchJob [props env gene-trees results]
+  JobProtocol
+  (pre-run-check
+   [job]
+   job)
+  
+  (print-job
+   [job]
+   (m/print-search-job job)
+   job)
+
+  (run
+   [job]
+   (let [gene-matrices  (lt/gene-trees-to-matrices gene-trees (env :lin-to-index))
+         min-gene-matrix (reduce lt/reduce-matrices
+                                 (u/make-stem-array (env :mat-size)) gene-matrices)
+         spec-matrix (lt/to-spec-matrix min-gene-matrix env)
+         spec-lst (lt/matrix->sorted-list spec-matrix (env :index-to-spec))
+         [tree-set tree] (first (lt/tree-from-seq spec-lst))
+         species-newick (newick/tree->newick-str tree)
+         species-vec-tree (newick/build-tree-from-newick-str species-newick 1.0 1.0)]
+     (->> (s/search-for-trees species-vec-tree gene-trees spec-matrix props env)
+          (hash-map :best-trees)
+          (assoc job :results))))
+  
+  (print-results
+   [job]
+   (m/print-search-results results)
+   job)
+  
+  (print-results-to-file
+   [job filename]
+   job))
 
 (defn build-lin-to-spec-map
   "From the generic property map, builds the lineages to species map"
@@ -123,6 +158,6 @@
         env (create-env s)
         gene-trees (g-tree/get-gene-trees files (env :theta))]
     (case (properties "run")
-          "0" (UserTreeJob. properties env gene-trees nil)
-          "2" (SearchJob. properties env gene-trees nil)
+          0 (UserTreeJob. properties env gene-trees nil)
+          2 (SearchJob. properties env gene-trees nil)
           (LikJob. properties env gene-trees nil))))
