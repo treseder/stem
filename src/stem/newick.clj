@@ -16,7 +16,7 @@
             [vijual :as vij]))
 
 ;; :name is a string, :time and :c-time are floats, and :desc is a set
-(defrecord Node [name b-len c-time desc])
+(defrecord Node [^String name ^double b-len ^double c-time ^clojure.lang.PersistentHashSet desc])
 
 ;; counter to uniquely identify internal nodes
 (def i-node-counter (util/make-counter 0))
@@ -40,7 +40,7 @@
   (if (zero? num) 0.00001 num))
 
 (defn create-node [n b-len c-time desc-set]
-  (Node. (.trim n) (make-precise b-len) (make-precise c-time) desc-set))
+  (Node. (.trim ^String n) (make-precise b-len) (make-precise c-time) desc-set))
 
 (defn is-leaf? [node]
   (let [[s left right] node] (nil? left)))
@@ -119,9 +119,29 @@
            (rec-tree->newick-str r time) ")" ":"
            (format-time (- p-time time))))))
 
-(defn tree->newick-str [tree]
+(defn tree->newick-str 
+  "Turns the likelihood tree data structure:
+  [time [time [name] [name]] [name]
+  into a newick tree"
+  [tree]
   (let [[n l r] tree]
     (str "(" (rec-tree->newick-str l n) ","  (rec-tree->newick-str r n) ");" )))
+
+(defn rec-vector-tree->newick-str
+  [branch p-time]
+  (let [[{:keys [name c-time]} l r] branch]
+    (if (is-leaf? branch)
+      (str name ":"  (format-time p-time))
+      (str "(" (rec-vector-tree->newick-str l c-time) ","
+           (rec-vector-tree->newick-str r c-time) ")" ":"
+           (format-time (- p-time c-time))))))
+
+(defn vector-tree->newick-str
+  "Turns any vector nested tree into a newick string"
+  [tree]
+  (let [[{c-time :c-time} l r] tree]
+    (str "(" (rec-vector-tree->newick-str l c-time) ","
+         (rec-vector-tree->newick-str r c-time) ");" )))
 
 ;;;;;;;;;;;;;;;;;;
 ;; drawing trees

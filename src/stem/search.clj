@@ -13,12 +13,6 @@
       loc
       (z/replace loc (vec (cons (n/create-node name epsilon (- pc-time epsilon) desc) (z/children loc)))))))
 
-(defn make-fix-tree-node [node children]
-;  (println (str "node=====" node))
-;  (println "children=====" )
-;  (doseq [c children] (println c))
-;  (println (str "branch-node=====" (vec (cons (first node) children))))
-  (vec (cons (first node) children)))
 
 (defn fix-tree-times
   "After a tree has been changed, it's possible that a parent node has a smaller
@@ -26,8 +20,8 @@
   fixes the tree so that all descendents have slightly smaller coalescent times than
   their parent"
   [tree]
-  (let [make-node #(vec (cons %1 %2))]
-    (loop [loc (z/zipper second rest make-fix-tree-node tree)]
+  (let [make-node #(vec (cons (first %1) %2))]
+    (loop [loc (z/zipper second rest make-node tree)]
       (if (z/end? loc)
         (z/root loc)
         (recur (z/next
@@ -37,7 +31,6 @@
 
 (defn find-target-node
   [zipped-tree target-name]
-  (println (str "looking for target: " target-name))
   (loop [node (z/next zipped-tree)]
     (let [name (:name (first (z/node node)))]
       (if (= name target-name)
@@ -77,8 +70,6 @@
   changed parent nodes.  Each new node needs the minimum time of the pairs of species
   from each branch, along with the new descendent set."
   [spec-mat spec-to-idx node children]
-  (println (str "Make node:\n" node))
-  (println (str "children:\n" (first children) "\n" (second children)))
   (let [[[{l-name :name l-descs :desc lc-time :c-time}] [{r-name :name r-descs :desc rc-time :c-time}]] children
         r-specs (if-not (empty? r-descs) r-descs #{r-name})
         l-specs (if-not (empty? l-descs) l-descs #{l-name})
@@ -87,7 +78,6 @@
                                 (- c-time lc-time)  
                                 c-time
                                 (union r-specs l-specs))]
-    (println new-node)
     (vec (cons new-node children))))
 
 (defn permute-tree
@@ -99,7 +89,6 @@
         target-sib-node (get-sib-node target-loc)
         ;; if rand num = 1 changes left child, else right child
         left-child? (if (= (+ (rand-int 2) 1) 1) true false)]
-    (println (str "Left child: " left-child?))
     (change-tree target-loc left-child?)))
 
 (defn keep-tree?
@@ -118,8 +107,8 @@
 
 (defn search-for-trees
   [s-vec-tree gene-trees spec-matrix props env]
-  (n/see-vector-tree s-vec-tree)
-  (u/print-array spec-matrix)
+  ;(n/see-vector-tree s-vec-tree)
+  ;(u/print-array spec-matrix)
   (let [make-node-fn (partial make-node spec-matrix (:spec-to-index env))
         int-node-cnt (- (count (:spec-to-index env)) 2)
         theta (:theta env)
@@ -138,9 +127,8 @@
        (take num-saved-trees best-trees)
        (let [tree (permute-tree s-tree make-node-fn int-node-cnt rand-fun)
              lik (l/calc-mle gene-trees tree (:spec-to-lin env) theta)
-             abs-dif (Math/abs (- prev-lik lik))
+             abs-dif (Math/abs (double (- prev-lik lik)))
              next-c0 (if (> iter burnin) max-lik-change c0)]
-         ;;(swank.core/break)
          (if (or (> lik prev-lik) (keep-tree? prev-lik lik iter c0 beta rand-fun))
            (recur lik tree (maybe-add-to-best lik tree best-trees num-saved-trees) next-c0 (max abs-dif max-lik-change) (inc iter))
            (recur prev-lik s-tree best-trees next-c0 (max abs-dif max-lik-change) (inc iter))))))))

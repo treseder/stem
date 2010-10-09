@@ -1,6 +1,7 @@
 (ns stem.util
   (:use [stem.constants])
-  (:require [clojure.string :as str])
+  (:require [clojure.string :as str]
+            [clojure.java.io :as io])
   (:import [java.io File StringReader BufferedReader]
            [java.util Random]))
 
@@ -65,8 +66,22 @@
 (defmethod to-double java.lang.Double [i]
   i)
 
+(defn read-file [f]
+  (slurp f))
+
 (defn write-to-file [f str]
   (spit f str))
+
+(defn write-lines
+  "Writes lines (a seq) to f, separated by newlines.  f is opened with
+  writer, and automatically closed at the end of the sequence."
+  [f lines]
+  (with-open [writer (io/writer f)]
+    (loop [lines lines]
+      (when-let [line (first lines)]
+        (.write writer (str line))
+        (.newLine writer)
+        (recur (rest lines))))))
 
 (defn get-file
   [f-name]

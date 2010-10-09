@@ -15,4 +15,6 @@
 (def *burnin-default* 100)
 (def *beta-default* 0.0005)
 (def *bound-total-iter-default* 300)
+(def *mle-filename-default* "mle.tree")
+(def *search-filename-default* "search.trees")
 

@@ -17,9 +17,10 @@
         time-dif (zero->tiny (- end start))
         exp-part (Math/exp (- (* comb time-dif)))
         mle  (if-not leaving? (* 2 exp-part) exp-part)]
-    ;(println (str "mle start, stop: " start " " end))
-    ;(println (str "mle: " (Math/log mle)))
-    mle))
+    ;;(println (str "mle start, stop: " start " " end))
+    ;;(println (str "mle: " (Math/log mle)))
+    (when (zero? mle) (swank.core/break))
+    (Math/log mle)))
 
 (defn calc-mle-for-branch
   "TODO: what about c-events that occur at the exact same time?"
@@ -33,20 +34,22 @@
                          (and (>= c-time start)
                               (< c-time end)
                               (set/subset? c-lins lins-in-branch)))
-        coal-events (filter coal-filter-fn coal-nodes)
+        ;; events that occurred within branch
+        coal-events (filter coal-filter-fn coal-nodes) 
         mle-fn (fn [[mle num-lins last-c-time] event]
-                 [(* mle (calc-mle-for-coalescent-event num-lins two-div-theta last-c-time (:c-time event) false)),
+                 [(+ mle (calc-mle-for-coalescent-event num-lins two-div-theta last-c-time (:c-time event) false)),
                   (- num-lins 1),
                   (:c-time event)])
-        [cum-mle rem-num-lins last-c-time] (reduce mle-fn [1 num-lins-at-start start] coal-events)]
+        [cum-mle rem-num-lins last-c-time] (reduce mle-fn [0 num-lins-at-start start] coal-events)]
     ;; at the end of each branch, the probability that the remaining
-    ;; lineages don't coalesce must be calculated, too
+    ;; lineages don't coalesce must be calculated
     (let [ret-mle (if (> rem-num-lins 1)
-                    [(* cum-mle
+                    [(+ cum-mle
                         (calc-mle-for-coalescent-event
                          rem-num-lins two-div-theta last-c-time end true)), rem-num-lins]
                     [cum-mle, rem-num-lins])]
-      ;(println (str "return mle for branch: " ret-mle))
+      (when (= Double/NEGATIVE_INFINITY (first ret-mle)) (swank.core/break))
+      (println (str "mle for branch: " ret-mle))
       ret-mle)))
 
 (defn calc-mle-for-branches
@@ -58,7 +61,7 @@
   (let [[n l r] s-node]
     (if-not l ;leaf
       (let [cum-lins (spec-to-lin (:name n))]
-        [1 cum-lins (count cum-lins) 0])
+        [0 cum-lins (count cum-lins) 0])
       (let [end-time (:c-time n)
             ;; depth traversal - gets to bottom of tree and works up
             [l-cum-mle l-lins l-num-lins l-time] (calc-mle-for-branches l coal-nodes spec-to-lin two-div-theta)
@@ -66,7 +69,7 @@
             ;; calculating the two branches from this node to its two descendents
             [l-mle l-end-lins] (calc-mle-for-branch coal-nodes l-lins l-num-lins l-time end-time two-div-theta)
             [r-mle r-end-lins] (calc-mle-for-branch coal-nodes r-lins r-num-lins r-time end-time two-div-theta)
-            cum-mle (* l-cum-mle r-cum-mle l-mle r-mle)]
+            cum-mle (+ l-cum-mle r-cum-mle l-mle r-mle)]
         ;(println (str "cum-mle: " l-cum-mle " " r-cum-mle " " l-mle " " r-mle " " cum-mle))
         [cum-mle (set/union l-lins r-lins) (+ l-end-lins r-end-lins) end-time]))))
 
@@ -92,9 +95,11 @@
                                                  num-lins end-time
                                                  Double/POSITIVE_INFINITY
                                                  two-div-theta)]
-    ;(println (str "MLE for tree " (counter) " is " (* tree-mle before-tree-mle)))
-    (* tree-mle before-tree-mle)))
+    (println (str "MLE for tree " (counter) " is " (+ tree-mle before-tree-mle) "\n"))
+    (+ tree-mle before-tree-mle)))
 
 (defn calc-mle
   [gene-trees s-tree spec-to-lin theta]
-  (reduce #(+ %1 (Math/log (calc-mle-for-tree (:vec-tree %2) s-tree spec-to-lin (/ 2 theta)))) 0 gene-trees))
+  ;(reduce #(+ %1 (Math/log (calc-mle-for-tree (:vec-tree %2) s-tree
+                                        ;spec-to-lin (/ 2 theta)))) 0 gene-trees))
+  (reduce #(+ %1 (calc-mle-for-tree (:vec-tree %2) s-tree spec-to-lin (/ 2 theta))) 0 gene-trees))
