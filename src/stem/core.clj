@@ -10,5 +10,5 @@
   to species."
   [& args]
   (m/header-message *stem-version*)
-  (-> (j/create-job) (j/pre-run-check) (j/print-job) (j/run) (j/print-results))
+  (-> (j/create-job) (j/pre-run-check) (j/print-job) (j/run) (j/print-results) (j/print-results-to-file))
   (if *in-production* (System/exit 0)))

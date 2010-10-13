@@ -23,6 +23,7 @@
 
 (defrecord UserTreeJob [props env gene-trees results]
   JobProtocol
+
   (pre-run-check
    [job]
    (doseq [k [:theta :lin-set :spec-set]]
@@ -56,8 +57,7 @@
   
   (print-results-to-file
    [job]
-   job)
-)
+   job))
 
 (defrecord LikJob [props env gene-trees results]
   JobProtocol
@@ -95,8 +95,7 @@
   (print-results-to-file
    [job]
    (let [f (get props "mle-filename" *mle-filename-default*)]
-       (u/write-to-file f ((job :results) :species-tree)))
-   job))
+     (u/write-lines f (map #(newick/tree->newick-str (second (first (lt/tree-from-seq %1)))) (:tied-trees results))))))
 
 (defrecord SearchJob [props env gene-trees results]
   JobProtocol
@@ -132,7 +131,7 @@
   (print-results-to-file
    [job]
    (let [f (get props "search-filename" *search-filename-default*)]
-     (u/write-lines f (map (fn [[lik newick]] (str "[" lik "]" newick)))))
+     (u/write-lines f (map (fn [[lik newick]] (str "[" (u/format-time lik) "]" newick)) (:best-trees results))))
    job))
 
 (defn build-lin-to-spec-map
@@ -195,8 +194,8 @@
          (u/abort-if-empty (k s-map) (k m/e-strs)))
        s-map)))
 
-(defn parse-user-tree-file []
-  (u/with-exc (u/read-file "user.tre") "You must specify a species tree in 'user.tre' to compute the likelihood."))
+(defn parse-user-tree-file [f]
+  (u/with-exc (u/read-file f) "You must specify a species tree in 'user.tre' to compute the likelihood."))
 
 (defn create-job [& file]
   (let [{:keys [properties files species] :as s} (parse-settings-file (first file))

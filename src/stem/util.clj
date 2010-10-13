@@ -1,5 +1,5 @@
 (ns stem.util
-  (:use [stem.constants])
+  (:use [clojure.pprint] [stem.constants])
   (:require [clojure.string :as str]
             [clojure.java.io :as io])
   (:import [java.io File StringReader BufferedReader]
@@ -82,6 +82,9 @@
         (.write writer (str line))
         (.newLine writer)
         (recur (rest lines))))))
+
+(defn format-time [time]
+  (cl-format nil "~,5f" time))
 
 (defn get-file
   [f-name]

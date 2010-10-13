@@ -26,12 +26,9 @@
   (if-not l
     [n]
     (lazy-cat (tree->seq l) (tree->seq r) [n])))
-(defn format-time [time]
-;  (swank.core/break)
-  (cl-format nil "~,5f" time))
 
 (defn make-precise [num]
-  (-> num (format-time) (util/to-double)))
+  (-> num (util/format-time) (util/to-double)))
 
 (defn zero->tiny-num
   "Zero times aren't really valid, but sometimes users include them; change
@@ -113,11 +110,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn rec-tree->newick-str [node p-time]
   (if (is-leaf? node)
-    (str (first node) ":"  (format-time p-time))
+    (str (first node) ":"  (util/format-time p-time))
     (let [[time l r] node]
       (str "(" (rec-tree->newick-str l time) ","
            (rec-tree->newick-str r time) ")" ":"
-           (format-time (- p-time time))))))
+           (util/format-time (- p-time time))))))
 
 (defn tree->newick-str 
   "Turns the likelihood tree data structure:
@@ -131,10 +128,10 @@
   [branch p-time]
   (let [[{:keys [name c-time]} l r] branch]
     (if (is-leaf? branch)
-      (str name ":"  (format-time p-time))
+      (str name ":"  (util/format-time p-time))
       (str "(" (rec-vector-tree->newick-str l c-time) ","
            (rec-vector-tree->newick-str r c-time) ")" ":"
-           (format-time (- p-time c-time))))))
+           (util/format-time (- p-time c-time))))))
 
 (defn vector-tree->newick-str
   "Turns any vector nested tree into a newick string"

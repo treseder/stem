@@ -119,7 +119,7 @@
         num-saved-trees (get props "num_saved_trees" *num-saved-trees-default*)]
    (loop [prev-lik (l/calc-mle gene-trees s-vec-tree (:spec-to-lin env) theta)
           s-tree s-vec-tree
-          best-trees (sorted-set-by #(> (first %1) (first %2)))
+          best-trees (-> (sorted-set-by #(> (first %1) (first %2))) (conj [prev-lik s-tree]))
           c0 (* (- prev-lik) 0.25)
           max-lik-change 0.0
           iter 1]

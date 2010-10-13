@@ -47,17 +47,16 @@
   (println "\nBeginning search now (this could take a while)...\n"))
 
 (defn print-user-job [{:keys [props env gene-trees]}]
-  (println "Species tree read from 'user.tre':")
-  (println)
+  (println "\nSpecies tree read from 'user.tre':\n")
   (println (env :species-newick)))
 
 (defn print-search-results [{:keys [best-trees]}]
-  (println "Search completed.")
-  (println "Here are the results (also written to file 'search.trees':")
-  (doseq [[lik n-str] best-trees] (println (str "[" lik "] " n-str))))
+  (println "Search completed.\n")
+  (println "Here are the results (also written to file 'search.trees'):\n")
+  (doseq [[lik n-str] best-trees] (println (str "[" (util/format-time lik) "] " n-str))))
 
 (defn print-user-results [{:keys [likelihood]}]
-  (println (str "\nThe likelihood for the tree is: " likelihood)))
+  (println (str "The likelihood for the tree is: " likelihood)))
 
 (defn yaml-message [prop-map]
   (println "Successfully parsed the settings file")

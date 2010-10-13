@@ -17,19 +17,13 @@
         time-dif (zero->tiny (- end start))
         exp-part (Math/exp (- (* comb time-dif)))
         mle  (if-not leaving? (* 2 exp-part) exp-part)]
-    ;;(println (str "mle start, stop: " start " " end))
-    ;;(println (str "mle: " (Math/log mle)))
-    (when (zero? mle) (swank.core/break))
-    (Math/log mle)))
+    (Math/log (if (zero? mle) (Double/MIN_VALUE) mle))))
 
 (defn calc-mle-for-branch
   "TODO: what about c-events that occur at the exact same time?"
   [coal-nodes lins-in-branch num-lins-at-start start end two-div-theta]
   ;; the coal-filter-fn could be refactored out to avoid duplication,
   ;; but who can resist that nice closure
-  ;(println (str "lins-in-branch: " lins-in-branch))
-  ;(println (str "lins-at-start: " num-lins-at-start))
-  ;(println (str "Times: " start " " end))
   (let [coal-filter-fn (fn [{c-time :c-time c-lins :desc}]
                          (and (>= c-time start)
                               (< c-time end)
@@ -48,8 +42,6 @@
                         (calc-mle-for-coalescent-event
                          rem-num-lins two-div-theta last-c-time end true)), rem-num-lins]
                     [cum-mle, rem-num-lins])]
-      (when (= Double/NEGATIVE_INFINITY (first ret-mle)) (swank.core/break))
-      (println (str "mle for branch: " ret-mle))
       ret-mle)))
 
 (defn calc-mle-for-branches
@@ -70,7 +62,6 @@
             [l-mle l-end-lins] (calc-mle-for-branch coal-nodes l-lins l-num-lins l-time end-time two-div-theta)
             [r-mle r-end-lins] (calc-mle-for-branch coal-nodes r-lins r-num-lins r-time end-time two-div-theta)
             cum-mle (+ l-cum-mle r-cum-mle l-mle r-mle)]
-        ;(println (str "cum-mle: " l-cum-mle " " r-cum-mle " " l-mle " " r-mle " " cum-mle))
         [cum-mle (set/union l-lins r-lins) (+ l-end-lins r-end-lins) end-time]))))
 
 
@@ -95,11 +86,8 @@
                                                  num-lins end-time
                                                  Double/POSITIVE_INFINITY
                                                  two-div-theta)]
-    (println (str "MLE for tree " (counter) " is " (+ tree-mle before-tree-mle) "\n"))
     (+ tree-mle before-tree-mle)))
 
 (defn calc-mle
   [gene-trees s-tree spec-to-lin theta]
-  ;(reduce #(+ %1 (Math/log (calc-mle-for-tree (:vec-tree %2) s-tree
-                                        ;spec-to-lin (/ 2 theta)))) 0 gene-trees))
   (reduce #(+ %1 (calc-mle-for-tree (:vec-tree %2) s-tree spec-to-lin (/ 2 theta))) 0 gene-trees))

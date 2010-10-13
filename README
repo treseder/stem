@@ -15,9 +15,10 @@ It is a small, simple, readable format, and for our purposes STEM 2.0 only uses 
 The settings file itself is broken up into three small sections.  Here is an example file:
 
 properties:
-  search: 1	   #0=user-tree, 1=MLE, 2=search
+  run: 2	   #0=user-tree, 1=MLE, 2=search
   theta: 0.001
   num_saved_trees: 15
+  beta: 0.0005
 species:
   Species1: Name1, Name2, Name3
   Species2: Name4, Name5
@@ -30,3 +31,26 @@ files:
 The properties section is where various STEM parameters are set, e.g. theta.  The species section is similar to STEM 1.1: each species identifier is followed by a comma-separated list of its associated  lineages.  The files section is last (although, these sections can be in any order in the file).  If you are using parsing method 1 above, then there will be no files section, and STEM 2.0 will look for a file named 'genetrees.tre' in the current working directory.  If you are going to use method (2), then this is the section where each file is declared, followed by its tree multiplier.
 
 A couple of notes: indentation matters, i.e. it's how YAML delineates sections.  Each child of one of the sections is indented (uniformly) more than its parent.  And lastly, for now, there must be a space after each ':'.
+
+Most properties have reasonable defaults:
+
+num-saved-trees: 10           # how many trees to save during simulated annealing search
+burnin-default: 100
+bound-total-iter: 200000      # how many iterations for search
+beta: 0.0005
+mle-filename: mle.tree        # name of file to save likelihood results
+search-filename: search.trees # name of file to save search results
+
+To actually run STEM, place the stem.jar in the directory containing the appropriate settings and genetree files and execute this command:
+
+java -jar stem.jar
+
+The command above can be tweaked to allocate more memory for its execution, i.e.
+
+java -Xmx128m -Xms128m -server -jar stem.jar
+
+A note about the simulated annealing search feature: occasionally the probability of a coalescent event occuring in a branch is zero, due to overflow.  If that occurs, STEM replaces zero with the minimum constant holding the smallest positive nonzero value, 2^-1074.
+
+
+
+
