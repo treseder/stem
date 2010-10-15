@@ -8,6 +8,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;functions for building the coalescent matrix ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
 (defn get-sorted-name-by-index [idx-map]
   (sort-by #(idx-map %) (keys idx-map)))
 
@@ -110,6 +112,12 @@
   [lst]
   (apply comb/cartesian-product (vals (group-by first lst))))
 
+(defn find-tied-trees [spec-lst]
+  (->> spec-lst
+      (get-list-permutations)
+      (map #(second (first (tree-from-seq (sort %1)))))
+      (set)))
+
 (defn matrix->sorted-list
   "Returns a list sorted by elements of the matrix.
   Assumes matrix is upper triangular where diag elements are zero"
@@ -118,8 +126,8 @@
         v (transient [])]
     (dorun
      (for [i (range size) j (range (+ i 1) size)]
-       (let [val (u/aget! m i j)]
-         (conj! v [val (idx-to-name i) (idx-to-name j)]))))
+       (let [time (u/aget! m i j)]
+         (conj! v [time (idx-to-name i) (idx-to-name j)]))))
     (sort #(compare (first %1) (first %2)) (persistent! v))))
 
 (defn partial-find
@@ -156,4 +164,15 @@
 
 (defn tree-from-seq [s]
   (reduce #(find-and-merge-nodes %1 %2) {} s))
+
+(defn get-lik-tree-parts [gene-trees env]
+  (let [gene-matrices  (gene-trees-to-matrices gene-trees (env :lin-to-index))
+        min-gene-matrix (reduce reduce-matrices
+                                (u/make-stem-array (env :mat-size)) gene-matrices)
+        spec-matrix (to-spec-matrix min-gene-matrix env)
+        spec-lst (matrix->sorted-list spec-matrix (env :index-to-spec))
+        tied-trees (find-tied-trees spec-lst)]
+    {:min-gene-matrix min-gene-matrix
+     :spec-matrix spec-matrix
+     :tied-trees tied-trees}))
 

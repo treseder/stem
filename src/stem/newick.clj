@@ -94,15 +94,15 @@
   [s rate theta]
   ((i-node-counter :reset)) ; resets counter for each tree parsed
   (try
-   (let [prepped-str (prep-newick-str (str/replace s ";" ""))
-         divisor (* rate theta)
-         lst (read-string prepped-str)
-         left (build-tree (first lst) divisor)
-         right (build-tree (second lst) divisor)
-         c-time (max-c-time left right)
-         desc-set (merge-desc left right)]
-     [(create-node *root-name* 0.0 c-time desc-set) left right])
-   (catch Exception e
+    (let [prepped-str (prep-newick-str (str/replace s ";" ""))
+          divisor (* rate theta)
+          lst (read-string prepped-str)
+          left (build-tree (first lst) divisor)
+          right (build-tree (second lst) divisor)
+          c-time (max-c-time left right)
+          desc-set (merge-desc left right)]
+      [(create-node *root-name* 0.0 c-time desc-set) left right])
+    (catch Exception e
      (util/abort "An error occured parsing the newick string" e))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

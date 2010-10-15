@@ -45,7 +45,7 @@ To actually run STEM, place the stem.jar in the directory containing the appropr
 
 java -jar stem.jar
 
-The command above can be tweaked to allocate more memory for its execution, i.e.
+The command above can be tweaked to allocate more memory for its execution, e.g.
 
 java -Xmx128m -Xms128m -server -jar stem.jar
 

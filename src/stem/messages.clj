@@ -17,11 +17,14 @@
     (println ~form)
     (flush)))
 
+(defn print-done []
+  (println "\n****************** Done ****************\n"))
+
 (defn print-lik-job-results [{:keys [tied-trees species-tree mle]}]
   (let [tt (count tied-trees)]
     (println "\n\n****************Results*****************")
     (println (str "\nLikelihood Species Tree (newick format):\n\n" species-tree))
-    (println-if (> tt 1) (str "\nNote: There were " tt " trees that have the same likelihood estimate as the tree above.  These trees will be output to the 'stem-tree.tre' file."))
+    (println-if (> tt 1) (str "\nNOTE: There were " tt " trees that have the same likelihood estimate as the tree above.  These trees will be output to the 'mle.tre' file."))
     (println (str "\nLikelihood estimate for tree: " mle))))
 
 (defn header-message [version]

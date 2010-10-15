@@ -74,17 +74,11 @@
   
   (run
    [job]
-   (let [gene-matrices  (lt/gene-trees-to-matrices gene-trees (env :lin-to-index))
-         min-gene-matrix (reduce lt/reduce-matrices
-                                 (u/make-stem-array (env :mat-size)) gene-matrices)
-         spec-matrix (lt/to-spec-matrix min-gene-matrix env)
-         spec-lst (lt/matrix->sorted-list spec-matrix (env :index-to-spec))
-         lst-of-perm (lt/get-list-permutations spec-lst)
-         [tree-set tree] (first (lt/tree-from-seq spec-lst))
-         species-newick (newick/tree->newick-str tree)
+   (let [{:keys [tied-trees spec-matrix]} (lt/get-lik-tree-parts gene-trees env)
+         species-newick (newick/tree->newick-str (first tied-trees))
          species-vec-tree (newick/build-tree-from-newick-str species-newick 1.0 1.0)
          mle (lik/calc-mle gene-trees species-vec-tree (env :spec-to-lin) (env :theta))
-         res {:tied-trees lst-of-perm, :species-matrix spec-matrix, :species-tree species-newick, :mle mle}]
+         res {:tied-trees tied-trees, :species-matrix spec-matrix, :species-tree species-newick, :mle mle}]
      (assoc job :results res)))
   
   (print-results
@@ -95,7 +89,9 @@
   (print-results-to-file
    [job]
    (let [f (get props "mle-filename" *mle-filename-default*)]
-     (u/write-lines f (map #(newick/tree->newick-str (second (first (lt/tree-from-seq %1)))) (:tied-trees results))))))
+     (u/write-lines f (map
+                       #(newick/tree->newick-str %)
+                       (:tied-trees results))))))
 
 (defrecord SearchJob [props env gene-trees results]
   JobProtocol
@@ -110,12 +106,7 @@
 
   (run
    [job]
-   (let [gene-matrices  (lt/gene-trees-to-matrices gene-trees (env :lin-to-index))
-         min-gene-matrix (reduce lt/reduce-matrices
-                                 (u/make-stem-array (env :mat-size)) gene-matrices)
-         spec-matrix (lt/to-spec-matrix min-gene-matrix env)
-         spec-lst (lt/matrix->sorted-list spec-matrix (env :index-to-spec))
-         [tree-set tree] (first (lt/tree-from-seq spec-lst))
+   (let [{:keys [tied-trees spec-matrix]} (lt/get-lik-tree-parts gene-trees env)
          species-newick (newick/tree->newick-str tree)
          species-vec-tree (newick/build-tree-from-newick-str species-newick 1.0 1.0)]
      (->> (s/search-for-trees species-vec-tree gene-trees spec-matrix props env)
@@ -131,7 +122,9 @@
   (print-results-to-file
    [job]
    (let [f (get props "search-filename" *search-filename-default*)]
-     (u/write-lines f (map (fn [[lik newick]] (str "[" (u/format-time lik) "]" newick)) (:best-trees results))))
+     (u/write-lines f (map
+                       (fn [[lik newick]] (str "[" (u/format-time lik) "]" newick))
+                       (:best-trees results))))
    job))
 
 (defn build-lin-to-spec-map
