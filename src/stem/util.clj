@@ -117,7 +117,7 @@
 (defn see-array [x] (if (array? x) (map see-array x) x))
 
 (defn array->str [a]
- (str "[" (reduce #(str %1 " " %2) a) "]"))
+ (str "[" (reduce #(str %1 " " (format-time %2)) "" a) "]"))
 
 (defn print-array [a]
   "Prints a 1D or 2D array"

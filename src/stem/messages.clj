@@ -20,9 +20,11 @@
 (defn print-done []
   (println "\n****************** Done ****************\n"))
 
-(defn print-lik-job-results [{:keys [tied-trees species-tree mle]}]
+(defn print-lik-job-results [{:keys [tied-trees species-tree species-matrix mle]}]
   (let [tt (count tied-trees)]
-    (println "\n\n****************Results*****************")
+    (println "\n\n****************Results*****************\n")
+    (println "D_AB Matrix:")
+    (util/print-array species-matrix)
     (println (str "\nLikelihood Species Tree (newick format):\n\n" species-tree))
     (println-if (> tt 1) (str "\nNOTE: There were " tt " trees that have the same likelihood estimate as the tree above.  These trees will be output to the 'mle.tre' file."))
     (println (str "\nLikelihood estimate for tree: " mle))))
@@ -45,21 +47,27 @@
   (println "Setting used for STEM search:")
   (println (str "Using beta: " (get props "beta" *beta-default*)))
   (println (str "Using burnin: " (get props "burnin" *burnin-default*)))
-  (println (str "Using bound_total_iters: " (get props "bound_total_iter" *bound-total-iter-default*)))
+  (println (str "Using bound_total_iter: " (get props "bound_total_iter" *bound-total-iter-default*)))
   (println (str "Using num_saved_trees:: " (get props "num_saved_trees" *num-saved-trees-default*)))
   (println "\nBeginning search now (this could take a while)...\n"))
 
-(defn print-user-job [{:keys [props env gene-trees]}]
-  (println "\nSpecies tree read from 'user.tre':\n")
-  (println (env :species-newick)))
-
 (defn print-search-results [{:keys [best-trees]}]
   (println "Search completed.\n")
-  (println "Here are the results (also written to file 'search.trees'):\n")
+  (println "Here are the results (also written to file 'search.tre'):\n")
   (doseq [[lik n-str] best-trees] (println (str "[" (util/format-time lik) "] " n-str))))
 
-(defn print-user-results [{:keys [likelihood]}]
-  (println (str "The likelihood for the tree is: " likelihood)))
+(defn print-user-job [{:keys [props env gene-trees]}]
+  (println (str "\nRead " (count (env :user-trees)) " species tree[s] from 'user.tre'")))
+
+(defn print-user-results [user-newicks {:keys [user-liks mle mle-newick]}]
+  (println "\n\n****************Results*****************\n")
+  (doseq [[tree lik ] (partition 2 (interleave user-newicks user-liks))]
+    (println "User tree: ")
+    (println tree)
+    (println (str "Likelihood for tree: " lik "\n")))
+  (println "The maximum likelihood tree is:")
+  (println mle-newick)
+  (println (str "Likelihood for tree: " mle)))
 
 (defn yaml-message [prop-map]
   (println "Successfully parsed the settings file")

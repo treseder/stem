@@ -38,21 +38,18 @@
   
   (run
    [job]
-   (let [gene-matrices  (lt/gene-trees-to-matrices gene-trees (env :lin-to-index))
-         min-gene-matrix (reduce lt/reduce-matrices
-                                 (u/make-stem-array (env :mat-size)) gene-matrices)
-         spec-matrix (lt/to-spec-matrix min-gene-matrix env)
-         spec-lst (lt/matrix->sorted-list spec-matrix (env :index-to-spec))
-         lst-of-perm (lt/get-list-permutations spec-lst)
-         [tree-set tree] (first (lt/tree-from-seq spec-lst))
-         species-vec-tree (newick/build-tree-from-newick-str (env :species-newick) 1.0 1.0)
-         likelihood (lik/calc-mle gene-trees species-vec-tree (env :spec-to-lin) (env :theta))
-         res {:likelihood likelihood}]
+   (let [{:keys [tied-trees spec-matrix]} (lt/get-lik-tree-parts gene-trees env)
+         mle-newick (newick/tree->newick-str (first tied-trees))
+         mle-vec-tree (newick/build-tree-from-newick-str mle-newick 1.0 1.0)
+         mle (lik/calc-mle gene-trees mle-vec-tree (env :spec-to-lin) (env :theta))
+         user-vec-trees (map #(newick/build-tree-from-newick-str % 1.0 1.0) (env :user-trees))
+         user-liks (lik/calc-mles gene-trees user-vec-trees (env :spec-to-lin) (env :theta))
+         res {:user-liks user-liks :mle mle :mle-newick mle-newick}]
      (assoc job :results res)))
   
   (print-results
    [job]
-   (m/print-user-results results)
+   (m/print-user-results (env :user-trees) results)
    job)
   
   (print-results-to-file
@@ -74,7 +71,7 @@
   
   (run
    [job]
-   (let [{:keys [tied-trees spec-matrix]} (lt/get-lik-tree-parts gene-trees env)
+   (let [{:keys [min-gene-matrix tied-trees spec-matrix]} (lt/get-lik-tree-parts gene-trees env)
          species-newick (newick/tree->newick-str (first tied-trees))
          species-vec-tree (newick/build-tree-from-newick-str species-newick 1.0 1.0)
          mle (lik/calc-mle gene-trees species-vec-tree (env :spec-to-lin) (env :theta))
@@ -107,7 +104,7 @@
   (run
    [job]
    (let [{:keys [tied-trees spec-matrix]} (lt/get-lik-tree-parts gene-trees env)
-         species-newick (newick/tree->newick-str tree)
+         species-newick (newick/tree->newick-str (first tied-trees))
          species-vec-tree (newick/build-tree-from-newick-str species-newick 1.0 1.0)]
      (->> (s/search-for-trees species-vec-tree gene-trees spec-matrix props env)
           (map (fn [[lik vec-tree]] [lik (newick/vector-tree->newick-str vec-tree)]))
@@ -188,13 +185,15 @@
        s-map)))
 
 (defn parse-user-tree-file [f]
-  (u/with-exc (u/read-file f) "You must specify a species tree in 'user.tre' to compute the likelihood."))
+  (-> (u/with-exc (u/read-file f) "You must specify a species tree in 'user.tre' to compute the likelihood.")
+      (u/remove-whitespace)
+      (str/split #";")))
 
 (defn create-job [& file]
   (let [{:keys [properties files species] :as s} (parse-settings-file (first file))
         env (create-env s)
         gene-trees (g-tree/get-gene-trees files (env :theta))]
     (case (properties "run")
-          0 (UserTreeJob. properties (assoc env :species-newick (parse-user-tree-file "user.tre")) gene-trees nil)
+          0 (UserTreeJob. properties (assoc env :user-trees (parse-user-tree-file "user.tre")) gene-trees nil)
           2 (SearchJob. properties env gene-trees nil)
           (LikJob. properties env gene-trees nil))))

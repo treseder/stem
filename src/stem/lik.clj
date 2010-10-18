@@ -91,3 +91,7 @@
 (defn calc-mle
   [gene-trees s-tree spec-to-lin theta]
   (reduce #(+ %1 (calc-mle-for-tree (:vec-tree %2) s-tree spec-to-lin (/ 2 theta))) 0 gene-trees))
+
+(defn calc-mles
+  [gene-trees s-trees spec-to-lin theta]
+  (map #(calc-mle gene-trees % spec-to-lin theta) s-trees))

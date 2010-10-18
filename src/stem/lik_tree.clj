@@ -67,16 +67,16 @@
      (for [i (range p) j (range (+ i 1) p)]
        (let [a-val (u/aget! a i j)
              b-val (u/aget! b i j)]
-         (if (or (zero? a-val) (and (< b-val a-val) (u/not-zero? b-val))  )
+         (if (or (zero? a-val) (and (< b-val a-val) (u/not-zero? b-val)))
            (u/aset! a i j b-val)))))
     a))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; functions for generating species matrix;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn fill-matrix-for-species [i j c-time spec-to-index s-matrix]
+(defn fill-matrix-for-species [i j c-time s-matrix]
   (let [current-val (if (> i j) (u/aget! s-matrix j i)  (u/aget! s-matrix i j) )]
-    (if  (or (< c-time current-val) (= current-val 0))
+    (if (and (u/not-zero? c-time) (or (< c-time current-val) (zero? current-val)))
       (if (< i j)
         (u/aset! s-matrix i j c-time)
         (u/aset! s-matrix j i c-time)))))
@@ -94,8 +94,7 @@
              i-spec (spec-to-index (lin-to-spec i-lin))
              j-spec (spec-to-index (lin-to-spec j-lin))]
          (if-not (= i-spec j-spec)
-           (fill-matrix-for-species i-spec j-spec (u/aget! l-matrix i j)
-                                    spec-to-index s-matrix)))))
+           (fill-matrix-for-species i-spec j-spec (u/aget! l-matrix i j) s-matrix)))))
     s-matrix))
 
 
@@ -111,12 +110,6 @@
   Find all permutations of this list, thus finding all tied likelihood trees"
   [lst]
   (apply comb/cartesian-product (vals (group-by first lst))))
-
-(defn find-tied-trees [spec-lst]
-  (->> spec-lst
-      (get-list-permutations)
-      (map #(second (first (tree-from-seq (sort %1)))))
-      (set)))
 
 (defn matrix->sorted-list
   "Returns a list sorted by elements of the matrix.
@@ -164,6 +157,12 @@
 
 (defn tree-from-seq [s]
   (reduce #(find-and-merge-nodes %1 %2) {} s))
+
+(defn find-tied-trees [spec-lst]
+  (->> spec-lst
+      (get-list-permutations)
+      (map #(second (first (tree-from-seq (sort %1)))))
+      (set)))
 
 (defn get-lik-tree-parts [gene-trees env]
   (let [gene-matrices  (gene-trees-to-matrices gene-trees (env :lin-to-index))
