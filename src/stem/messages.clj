@@ -26,7 +26,7 @@
     (println "D_AB Matrix:")
     (util/print-array species-matrix)
     (println (str "\nLikelihood Species Tree (newick format):\n\n" species-tree))
-    (println-if (> tt 1) (str "\nNOTE: There were " tt " trees that have the same likelihood estimate as the tree above.  These trees will be output to the 'mle.tre' file."))
+    (println-if (> tt 1) (str "\nNOTE: There were " tt " trees that have the same likelihood estimate.  These trees will be output to the 'mle.tre' file."))
     (println (str "\nLikelihood estimate for tree: " mle))))
 
 (defn header-message [version]

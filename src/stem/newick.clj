@@ -75,8 +75,9 @@
           desc-set (merge-desc left right)]
       ;; internal node
       [(create-node (str *internal-node-name* "-" ((i-node-counter :next)))
-                    (/ (zero->tiny-num t) div)
-                    (zero->tiny-num c-time)
+                    ;;(/ (zero->tiny-num t) div)
+                    (if-not (zero? t) (/ t div) t)
+                    c-time
                     desc-set)
        left right])))
 
@@ -103,7 +104,7 @@
           desc-set (merge-desc left right)]
       [(create-node *root-name* 0.0 c-time desc-set) left right])
     (catch Exception e
-     (util/abort "An error occured parsing the newick string" e))))
+      (util/abort "An error occured parsing the newick string" e))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; functions to generate newick-str from tree ;;

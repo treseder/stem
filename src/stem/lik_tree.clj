@@ -104,12 +104,6 @@
 (defn sort-vec-of-vec [coll]
   (sort #(compare (first %1) (first %2)) coll))
 
-(defn get-list-permutations
-  "The list of nodes used to build the ml species tree contains ties in how
-  the tree should be built, with some nodes having the same coalescent time.
-  Find all permutations of this list, thus finding all tied likelihood trees"
-  [lst]
-  (apply comb/cartesian-product (vals (group-by first lst))))
 
 (defn matrix->sorted-list
   "Returns a list sorted by elements of the matrix.
@@ -140,29 +134,85 @@
   ancestor.
   node-map is of the form {#{s1 s2} [.55 [s1][s2]]}
   node is a vector of size 3 that contains the coalescent time of the two species:
-  [0.55 s1 s2].  Ancestors are all internal nodes, with the species being leaves.
+  [0.55 s1 s2].  Ancestors are all internal nodes, with the species being leaves
   of the tree."
   [node-map node]
   (let [[time l-name r-name] node
         [l-descs l-tree] (partial-find l-name node-map)
         [r-descs r-tree] (partial-find r-name node-map)]
-    (if-not (or (contains? l-descs r-name)  (contains? r-descs l-name))
+    (if-not (or (contains? l-descs r-name) (contains? r-descs l-name))
+      (let [comb-tree (if (nil? l-tree)
+                        [time (nil->node l-name l-tree) (nil->node r-name r-tree)]
+                        [time (nil->node r-name r-tree) (nil->node l-name l-tree)])
+            new-descs (set/union (nil->set l-name l-descs) (nil->set r-name r-descs))]
+        (-> node-map (dissoc l-descs r-descs) (assoc new-descs comb-tree)))
+      node-map)))
+
+(defn find-and-merge-nodes-old
+  "Given a node and a map of nodes merge the node with its appropriate
+  ancestor.
+  node-map is of the form {#{s1 s2} [.55 [s1][s2]]}
+  node is a vector of size 3 that contains the coalescent time of the two species:
+  [0.55 s1 s2].  Ancestors are all internal nodes, with the species being leaves
+  of the tree."
+  [node-map node]
+  (let [[time l-name r-name] node
+        [l-descs l-tree] (partial-find l-name node-map)
+        [r-descs r-tree] (partial-find r-name node-map)]
+    (if-not (or (contains? l-descs r-name) (contains? r-descs l-name))
       (let [comb-tree [time (nil->node l-name l-tree) (nil->node r-name r-tree)]
             new-descs (set/union (nil->set l-name l-descs) (nil->set r-name r-descs))]
-           (->
-            node-map
-            (dissoc l-descs r-descs)
-            (assoc new-descs comb-tree)))
+           (-> node-map (dissoc l-descs r-descs) (assoc new-descs comb-tree)))
       node-map)))
 
 (defn tree-from-seq [s]
   (reduce #(find-and-merge-nodes %1 %2) {} s))
 
+(defn remove-unneeded-nodes
+  [spec-set spec-lst]
+  (filter (fn [[time l r]]
+            (not (and (contains? spec-set l)
+                      (contains? spec-set r))))
+          spec-lst))
+
+(defn get-specs-from-seq
+  "Sequence is of the form:
+  ([time spec-name1 spec-name2] [etc...])"
+  [lst]
+  (reduce (fn [spec-set [_ l-name r-name]]
+            (conj spec-set l-name r-name))
+          #{}
+          lst))
+
+(defn remove-unneeded-species-nodes
+  [spec-lst]
+  (reduce (fn [[spec-set cum-lst] lst]
+            (let [filt-lst (remove-unneeded-nodes spec-set lst)
+                  filt-set (get-specs-from-seq filt-lst)]
+              (if-not (empty? filt-lst)
+                [(set/union spec-set filt-set) (conj cum-lst filt-lst)]
+                ; keeps at least one from each group
+                [spec-set (conj cum-lst (list (first lst)))])))
+          [#{} '()]
+          spec-lst))
+
+(defn get-list-permutations
+  "The list of nodes used to build the ml species tree contains ties in how
+  the tree should be built, with some nodes having the same coalescent time.
+  Find all permutations of this list, thus finding all tied likelihood trees"
+  [lst]
+  (let [[_ clean-lst] (remove-unneeded-species-nodes
+                     (vals (into (sorted-map) (group-by first lst))))]
+    (map
+     #(apply concat %)
+     (apply comb/cartesian-product (map comb/permutations clean-lst)))))
+
+
 (defn find-tied-trees [spec-lst]
   (->> spec-lst
-      (get-list-permutations)
-      (map #(second (first (tree-from-seq (sort %1)))))
-      (set)))
+       (get-list-permutations)
+       (map #(second (first (tree-from-seq (sort-by first %1)))))
+       (set)))
 
 (defn get-lik-tree-parts [gene-trees env]
   (let [gene-matrices  (gene-trees-to-matrices gene-trees (env :lin-to-index))
