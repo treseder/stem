@@ -16,8 +16,9 @@
   (let [comb (* num-lins (- num-lins 1))
         time-dif (zero->tiny (- end start))
         exp-part (Math/exp (- (* comb time-dif)))
-        mle  (if-not leaving? (* 2 exp-part) exp-part)]
-    (Math/log (if (zero? mle) (Double/MIN_VALUE) mle))))
+        mle  (if-not leaving? (* 2 exp-part) exp-part)
+        ret-mle (Math/log (if (zero? mle) (Double/MIN_VALUE) mle))]
+    ret-mle))
 
 (defn calc-mle-for-branch
   "TODO: what about c-events that occur at the exact same time?"

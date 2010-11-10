@@ -130,7 +130,7 @@
   (reduce
    (fn [m [k v]]
      (let [lins  (str/split (u/remove-whitespace v) #",")]
-       (merge m (zipmap lins (repeat k)))))
+       (merge m (zipmap lins (repeat (str k))))))
    {} (:species props)))
 
 (defn build-spec-to-lin-map
@@ -138,7 +138,7 @@
   (reduce
    (fn [m [k v]]
      (let [lins  (str/split (u/remove-whitespace v) #",")]
-       (merge m {k (set lins)})))
+       (merge m {(str k) (set lins)})))
    {} (:species props)))
 
 (defn create-name-to-index-map
