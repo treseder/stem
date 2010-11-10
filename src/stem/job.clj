@@ -20,6 +20,31 @@
   (print-results [job])
   (print-results-to-file [job]))
 
+(defrecord HybridJob [props env gene-trees results]
+  JobProtocol
+  (pre-run-check
+   [job]
+   (doseq [k [:theta :lin-set :spec-set]]
+     (u/abort-if-empty (env k) (m/e-strs k)))
+   job)
+  
+  (print-job
+   [job]
+   job)
+  
+  (run
+   [job]
+   (let [{:keys [tied-trees spec-matrix]} (lt/get-lik-tree-parts gene-trees env)]
+     job))
+  
+  (print-results
+   [job]
+   job)
+  
+  (print-results-to-file
+   [job]
+   job))
+
 
 (defrecord UserTreeJob [props env gene-trees results]
   JobProtocol
@@ -177,7 +202,8 @@
   ([file-name]
      (let [f (if (nil? file-name) (u/get-settings-filename) file-name)
            yaml (Yaml.)
-           yaml-map (u/with-exc (.load yaml (slurp f)) (m/e-strs :yaml))
+           yaml-map (u/with-exc
+                      (.load yaml (str/replace (slurp f) "\t" "  ")) (m/e-strs :yaml))
            s-map (zipmap (map keyword (.keySet yaml-map))
                          (map #(into {} %) (.values yaml-map)))]
        (doseq [k [:properties :species]]
