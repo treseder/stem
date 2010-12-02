@@ -15,6 +15,11 @@
   (let [rg (if seed (Random. seed) (Random.))]
     (fn [& [type n]] (if (= type :int) (.nextInt rg n) (.nextDouble rg)))))
 
+(defn zero->tiny-num
+  "Zero times aren't really valid, but sometimes users include them; change
+  to very small number "
+  [num]
+  (if-not (zero? num) num 0.00001))
 
 (def not-zero? (complement zero?))
 
@@ -60,11 +65,9 @@
 (defmethod to-double java.lang.String [s]
   (Double/parseDouble s))
 
-(defmethod to-double java.lang.Integer [i]
-  (double i))
+(defmethod to-double java.lang.Integer [i] (double i))
 
-(defmethod to-double java.lang.Double [i]
-  i)
+(defmethod to-double java.lang.Double [i] i)
 
 (defn read-file [f]
   (slurp f))
@@ -85,6 +88,9 @@
 
 (defn format-time [time]
   (cl-format nil "~,5f" time))
+
+(defn make-precise [num]
+  (-> num (format-time) (to-double)))
 
 (defn get-file
   [f-name]
@@ -133,6 +139,7 @@
   ([square] (make-stem-array square square))
   ([rows cols] (make-array Double/TYPE rows cols)))
 
+
 (defmacro aget!
   ([array x]      `(aget ~(vary-meta array assoc :tag 'doubles) ~x))
   ([array x & ys] `(let [a# (aget ~(vary-meta array assoc :tag 'objects) ~x)]
@@ -143,3 +150,17 @@
         a-sym         (with-meta (gensym "a") {:tag 'doubles})]
     `(let [~a-sym ~nested-array]
        (aset ~a-sym ~y (double ~v)))))
+
+(defn get-from-upper-triangular
+  "Assumes matrix is upper triangular"
+  [matrix i j]
+  (if (< i j)
+    (aget! matrix i j)
+    (aget! matrix j i)))
+
+(defn min-coal-time-for-node
+  [l-specs r-specs spec-mat spec-to-idx]
+  (reduce
+   min
+   (for [l-spec l-specs r-spec r-specs]
+     (get-from-upper-triangular spec-mat (spec-to-idx l-spec) (spec-to-idx r-spec)))))

@@ -148,23 +148,6 @@
         (-> node-map (dissoc l-descs r-descs) (assoc new-descs comb-tree)))
       node-map)))
 
-(defn find-and-merge-nodes-old
-  "Given a node and a map of nodes merge the node with its appropriate
-  ancestor.
-  node-map is of the form {#{s1 s2} [.55 [s1][s2]]}
-  node is a vector of size 3 that contains the coalescent time of the two species:
-  [0.55 s1 s2].  Ancestors are all internal nodes, with the species being leaves
-  of the tree."
-  [node-map node]
-  (let [[time l-name r-name] node
-        [l-descs l-tree] (partial-find l-name node-map)
-        [r-descs r-tree] (partial-find r-name node-map)]
-    (if-not (or (contains? l-descs r-name) (contains? r-descs l-name))
-      (let [comb-tree [time (nil->node l-name l-tree) (nil->node r-name r-tree)]
-            new-descs (set/union (nil->set l-name l-descs) (nil->set r-name r-descs))]
-           (-> node-map (dissoc l-descs r-descs) (assoc new-descs comb-tree)))
-      node-map)))
-
 (defn tree-from-seq [s]
   (reduce #(find-and-merge-nodes %1 %2) {} s))
 
@@ -202,7 +185,7 @@
   Find all permutations of this list, thus finding all tied likelihood trees"
   [lst]
   (let [[_ clean-lst] (remove-unneeded-species-nodes
-                     (vals (into (sorted-map) (group-by first lst))))]
+                       (vals (into (sorted-map) (group-by first lst))))]
     (map
      #(apply concat %)
      (apply comb/cartesian-product (map comb/permutations clean-lst)))))

@@ -7,14 +7,10 @@
             [clojure.contrib.combinatorics :as comb]))
 
 
-(defn zero->tiny [num]
-  (if-not (zero? num) num 0.00001))
-
-
 (defn calc-mle-for-coalescent-event
   [num-lins two-div-theta start end leaving?]
   (let [comb (* num-lins (- num-lins 1))
-        time-dif (zero->tiny (- end start))
+        time-dif (util/zero->tiny-num (- end start))
         exp-part (Math/exp (- (* comb time-dif)))
         mle  (if-not leaving? (* 2 exp-part) exp-part)
         ret-mle (Math/log (if (zero? mle) (Double/MIN_VALUE) mle))]

@@ -16,6 +16,11 @@
   `(if ~test
     (println ~form)
     (flush)))
+(defn header-message [version]
+  (println      "***************************************")
+  (println (str "**        Welcome to STEM " version "        **"))
+  (println      "***************************************\n")
+  (flush))
 
 (defn print-done []
   (println "\n****************** Done ****************\n"))
@@ -25,15 +30,9 @@
     (println "\n\n****************Results*****************\n")
     (println "D_AB Matrix:")
     (util/print-array species-matrix)
-    (println (str "\nLikelihood Species Tree (newick format):\n\n" species-tree))
-    (println-if (> tt 1) (str "\nNOTE: There were " tt " trees that have the same likelihood estimate.  These trees will be output to the 'mle.tre' file."))
-    (println (str "\nLikelihood estimate for tree: " mle))))
-
-(defn header-message [version]
-  (println      "***************************************")
-  (println (str "**        Welcome to STEM " version "        **"))
-  (println      "***************************************\n")
-  (flush))
+    (println (str "\nLikelihood Species Tree (Newick format):\n\n" species-tree))
+    (println-if (> tt 1) (str "\nNOTE: There were " tt " trees that have the same Log likelihood.  These trees will be output to the 'mle.tre' file."))
+    (println (str "\nLog likelihood for tree: " mle))))
 
 (defn print-lik-job [{:keys [props env gene-trees]}]
   (println "The settings file was successfully parsed...\n")
@@ -46,9 +45,10 @@
   (println "The settings file was successfully parsed...\n\n")
   (println "Setting used for STEM search:")
   (println (str "Using beta: " (get props "beta" *beta-default*)))
+  (println-if (get props "seed") (str "Using seed: " (get props "seed")))
   (println (str "Using burnin: " (get props "burnin" *burnin-default*)))
   (println (str "Using bound_total_iter: " (get props "bound_total_iter" *bound-total-iter-default*)))
-  (println (str "Using num_saved_trees:: " (get props "num_saved_trees" *num-saved-trees-default*)))
+  (println (str "Using num_saved_trees: " (get props "num_saved_trees" *num-saved-trees-default*)))
   (println "\nBeginning search now (this could take a while)...\n"))
 
 (defn print-search-results [{:keys [best-trees]}]
@@ -59,15 +59,17 @@
 (defn print-user-job [{:keys [props env gene-trees]}]
   (println (str "\nRead " (count (env :user-trees)) " species tree[s] from 'user.tre'")))
 
-(defn print-user-results [user-newicks {:keys [user-liks mle mle-newick]}]
+(defn print-user-results [user-newicks {:keys [user-liks optim-trees optim-liks]}]
   (println "\n\n****************Results*****************\n")
-  (doseq [[tree lik ] (partition 2 (interleave user-newicks user-liks))]
+  (doseq [[tree lik] (partition 2 (interleave user-newicks user-liks))]
     (println "User tree: ")
     (println tree)
-    (println (str "Likelihood for tree: " lik "\n")))
-  (println "The maximum likelihood tree is:")
-  (println mle-newick)
-  (println (str "Likelihood for tree: " mle)))
+    (println (str "Log likelihood for tree: " lik "\n")))
+  (println "\n**************Optimized Trees************\n")
+  (doseq [[tree lik] (partition 2 (interleave optim-trees optim-liks))]
+    (println "Optimized user tree: ")
+    (println tree)
+    (println (str "Log likelihood: " lik "\n"))))
 
 (defn yaml-message [prop-map]
   (println "Successfully parsed the settings file")
@@ -86,13 +88,3 @@
   (println (apply str (interpose ", " s)))
   (println) (flush))
 
-(defn spec-newick-message [s num-trees]
-  (println "The Maximum Likelihood tree (written to file 'mle.tre') is:")
-  (println)
-  (println s)
-  (println-if (> num-trees 1) (str "\nThere were also " num-trees " trees that have the same likelihood estimate as the tree above.\nThese trees are also output to 'mle.tre'."))
-  (flush))
-
-(defn mle-message [mle]
-  (println (str "The likelihood estimate is: " mle))
-  (flush))

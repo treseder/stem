@@ -1,7 +1,7 @@
 (ns stem.newick
   "Provides functions that parse newick formatted strings and build a binary
   tree with the following structure:
-  [{:name :b-len :c-time :desc} [...] [...]]
+  [{:name :b-len :c-time :desc} [... left ...] [... right ...]]
 
   :name name of node (leaf names from newick, internal nodes are 'internal')
   :b-len branch length - float of elapsed time to ancestor (obtained from newick)
@@ -27,29 +27,45 @@
     [n]
     (lazy-cat (tree->seq l) (tree->seq r) [n])))
 
-(defn make-precise [num]
-  (-> num (util/format-time) (util/to-double)))
-
-(defn zero->tiny-num
-  "Zero times aren't really valid, but sometimes users include them; change
-  to very small number "
-  [num]
-  (if (zero? num) 0.00001 num))
-
 (defn create-node [n b-len c-time desc-set]
-  (Node. (.trim ^String n) (make-precise b-len) (make-precise c-time) desc-set))
+  (Node. (.trim ^String n) (util/make-precise b-len) (util/make-precise c-time) desc-set))
 
 (defn is-leaf? [node]
-  (let [[s left right] node] (nil? left)))
+  (let [[n l r] node] (nil? l)))
 
 (defn max-c-time
-  "Given a parent's direct descendent nodes, calculate its c-time"  
+  "Normal way to compute the coalescent time of a tree given branch lengths
+  in the Newick format.
+  Given a parent's left and right children nodes, calculate its c-time"  
   [n1 n2]
-  (let [[node1 _ _] n1
-        [node2 _ _] n2
-        t1 (+ (:b-len node1) (:c-time node1))
-        t2 (+ (:b-len node2) (:c-time node2))]
-    (max t1 t2)))
+  (let [[{l-len :b-len l-time :c-time} _ _] n1
+        [{r-len :b-len r-time :c-time} _ _] n2]
+    (max (+ l-len l-time) (+ r-len r-time))))
+
+(defn optimized-c-time
+  "Computes the coalescent times for optimized trees using the D-AB matrix, i.e., the
+  min-species-matrix times"
+  [spec-to-index spec-mat left right]
+  (let [[{l-name :name l-descs :desc} _ _] left
+        [{r-name :name r-descs :desc} _ _] right
+        l-specs (if (empty? l-descs) #{l-name} l-descs)
+        r-specs (if (empty? r-descs) #{r-name} r-descs)]
+    (util/min-coal-time-for-node l-specs r-specs spec-mat spec-to-index)))
+
+(defn old-optimized-c-time
+  "Computes the coalescent times for optimized trees using the D-AB matrix, i.e., the
+  min-species-matrix times"
+  [spec-to-index spec-mat left right]
+  (let [[{l-name :name l-descs :desc} _ _] left
+        [{r-name :name r-descs :desc} _ _] right
+        l-specs (if (empty? l-descs) #{l-name} l-descs)
+        r-specs (if (empty? r-descs) #{r-name} r-descs)        
+        cross-prod (for [i l-specs j r-specs] [i j])
+        min-branch-fn (fn [min-time [l-spec r-spec]]
+                        (let [new-time (util/get-from-upper-triangular
+                                        spec-mat (spec-to-index l-spec) (spec-to-index r-spec))]
+                          (min new-time min-time)))]
+    (reduce min-branch-fn Double/POSITIVE_INFINITY cross-prod)))
 
 (defn merge-desc
   "Builds the descendent set of a parent given its direct descendent nodes"  
@@ -62,49 +78,66 @@
 
 (defn build-tree
   "Builds the nested vector tree structure that will be used throughout
-  the rest of the program"  
-  [el div]
+  the rest of the program.
+  c-time-fn is a function that takes two children nodes and determines the
+  c-time of the parent."  
+  [el div c-time-fn]
   (if (= (count el) 2)
     (let [[n t] el] ;; leafs are name:time
       ;; leaf node
       [(create-node (str n) (/ t div) 0.0 #{})])
     (let [[l r t] el
-          left (build-tree l div)
-          right (build-tree r div)
-          c-time (max-c-time left right)
+          left (build-tree l div c-time-fn)
+          right (build-tree r div c-time-fn)
+          c-time (c-time-fn left right)
           desc-set (merge-desc left right)]
       ;; internal node
       [(create-node (str *internal-node-name* "-" ((i-node-counter :next)))
-                    ;;(/ (zero->tiny-num t) div)
                     (if-not (zero? t) (/ t div) t)
                     c-time
                     desc-set)
        left right])))
 
-(defn prep-newick-str
-  "To make the tree easier for parsing the commas are replaced with ')('."
+(defn add-branch-lens 
+  "In some cases the Newick str will not include branch lens, but the
+  parser assumes it does.  Adds zero branch lens to allow code reuse.
+  Assumes the commas have already been replaced by ')('."
+  [s]
+  ;; if string contains ":" then branch lens are present
+  (if (.contains s ":")
+    (str/replace s ":" " ")
+    (str/replace s ")" " 0.0)")))
+
+(defn make-str-parseable
+  "Makes the Newick str parseable by read-string."
   [n-str]
-  (str "(" (str/replace (str/replace n-str "," ")(") ":" " ") ")"))
+  (str "("
+       (-> n-str
+           (str/replace ";" "")
+           (str/replace "," ")(")
+           (add-branch-lens))
+       ")"))
 
 (defn build-tree-from-newick-str
   "Parses s and builds a binary tree structure as a vector of
-  vectors.  s must conform to proper newick format.  If the
+  vectors.  s must conform to proper Newick format.  If the
   root is named, it is ignored.  Leafs are assumed to contain a
-  name:number, where number is optional.  All interior nodes must
-  have a number, but need not be named."
-  [s rate theta]
-  ((i-node-counter :reset)) ; resets counter for each tree parsed
-  (try
-    (let [prepped-str (prep-newick-str (str/replace s ";" ""))
-          divisor (* rate theta)
-          lst (read-string prepped-str)
-          left (build-tree (first lst) divisor)
-          right (build-tree (second lst) divisor)
-          c-time (max-c-time left right)
-          desc-set (merge-desc left right)]
-      [(create-node *root-name* 0.0 c-time desc-set) left right])
-    (catch Exception e
-      (util/abort "An error occured parsing the newick string" e))))
+  name:branch-len.  All interior nodes must have a branch-len,
+  but not named."
+  ([s rate theta] (build-tree-from-newick-str s rate theta max-c-time))
+  ([s rate theta c-time-fn]
+     ((i-node-counter :reset))   ; resets counter for each tree parsed
+     (try
+       (let [prepped-str (make-str-parseable s)
+             divisor (* rate theta)
+             lst (read-string prepped-str)
+             left (build-tree (first lst) divisor c-time-fn)
+             right (build-tree (second lst) divisor c-time-fn)
+             c-time (c-time-fn left right)
+             desc-set (merge-desc left right)]
+         [(create-node *root-name* 0.0 c-time desc-set) left right])
+       (catch Exception e
+         (util/abort "An error occured parsing the newick string" e)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; functions to generate newick-str from tree ;;
@@ -156,7 +189,8 @@
       [d-name]
       [d-name (create-drawable-tree left) (create-drawable-tree right)])))
 
-(defn see-vector-tree [vec-tree]
+(defn see-vector-tree
+  [vec-tree]
   (vij/draw-binary-tree (create-drawable-tree vec-tree)))
 
 (defn see-newick-tree [n-str]

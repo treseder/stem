@@ -15,7 +15,7 @@
 
 
 (defn fix-tree-times
-  "After a tree has been changed, it's possible that a parent node has a smaller
+  "After a tree has been permuted, it's possible that a parent node has a smaller
   coalescent time than its children, which in reality is not possible.  This function
   fixes the tree so that all descendents have slightly smaller coalescent times than
   their parent"
@@ -55,16 +55,6 @@
     (-> loc (to-child-loc) (z/replace sib-node)
         (z/up) (to-sib-loc) (z/replace child-node) (z/root) (fix-tree-times))))
 
-(defn min-coal-time-for-node
-  [l-specs r-specs spec-mat spec-to-idx]
-  (reduce min
-   (for [l-spec l-specs r-spec r-specs]
-     (let [i (spec-to-idx l-spec)
-           j (spec-to-idx r-spec)]
-       (if (< i j)
-         (u/aget! spec-mat i j)
-         (u/aget! spec-mat j i))))))
-
 (defn make-node
   "As the zipper puts the tree together, this function is called to create the new
   changed parent nodes.  Each new node needs the minimum time of the pairs of species
@@ -73,7 +63,7 @@
   (let [[[{l-name :name l-descs :desc lc-time :c-time}] [{r-name :name r-descs :desc rc-time :c-time}]] children
         r-specs (if-not (empty? r-descs) r-descs #{r-name})
         l-specs (if-not (empty? l-descs) l-descs #{l-name})
-        c-time  (min-coal-time-for-node l-specs r-specs spec-mat spec-to-idx)
+        c-time  (u/min-coal-time-for-node l-specs r-specs spec-mat spec-to-idx)
         new-node (n/create-node (:name (first node))
                                 (- c-time lc-time)  
                                 c-time
@@ -88,7 +78,7 @@
         target-loc (find-target-node zipped-tree target-name)
         target-sib-node (get-sib-node target-loc)
         ;; if rand num = 1 changes left child, else right child
-        left-child? (if (= (+ (rand-int 2) 1) 1) true false)]
+        left-child? (if (= (+ (rand-fun :int 2) 1) 1) true false)]
     (change-tree target-loc left-child?)))
 
 (defn keep-tree?
@@ -96,7 +86,7 @@
   based on a certain probability (to overcome local minimums)"
   [prev-lik lik i c0 beta rand-fun]
   (let [tree-prob (-> (- lik prev-lik) (/ (/ c0 (+ 1 (* i beta)))) (Math/exp))]
-    (> tree-prob (rand-fun))))
+    (or (> lik prev-lik) (> tree-prob (rand-fun)))))
 
 (defn maybe-add-to-best
   [lik tree trees keep-n]
@@ -124,12 +114,13 @@
           max-lik-change 0.0
           iter 1]
      (if (= iter total-iters)
+       ; done -  return best trees
        (take num-saved-trees best-trees)
        (let [tree (permute-tree s-tree make-node-fn int-node-cnt rand-fun)
              lik (l/calc-mle gene-trees tree (:spec-to-lin env) theta)
              abs-dif (Math/abs (double (- prev-lik lik)))
              next-c0 (if (> iter burnin) max-lik-change c0)]
-         (if (or (> lik prev-lik) (keep-tree? prev-lik lik iter c0 beta rand-fun))
+         (if (keep-tree? prev-lik lik iter c0 beta rand-fun)
            (recur lik tree (maybe-add-to-best lik tree best-trees num-saved-trees) next-c0 (max abs-dif max-lik-change) (inc iter))
            (recur prev-lik s-tree best-trees next-c0 (max abs-dif max-lik-change) (inc iter))))))))
 

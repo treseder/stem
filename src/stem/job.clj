@@ -1,13 +1,13 @@
 (ns stem.job
   (:use [stem.constants])
   (:require [stem.newick :as newick]
-            [stem.gene-tree :as g-tree]
             [stem.util :as u]
             [stem.messages :as m]
             [stem.lik :as lik]
             [clojure.string :as str]
             [stem.lik-tree :as lt]
-            [stem.search :as s])
+            [stem.search :as s]
+            [stem.gene-tree :as g-tree])
   (:import [java.io BufferedReader FileReader]
            [org.yaml.snakeyaml Yaml]))
 
@@ -64,12 +64,15 @@
   (run
    [job]
    (let [{:keys [tied-trees spec-matrix]} (lt/get-lik-tree-parts gene-trees env)
-         mle-newick (newick/tree->newick-str (first tied-trees))
-         mle-vec-tree (newick/build-tree-from-newick-str mle-newick 1.0 1.0)
-         mle (lik/calc-mle gene-trees mle-vec-tree (env :spec-to-lin) (env :theta))
+         optim-c-time-fn (partial newick/optimized-c-time (env :spec-to-index) spec-matrix)
+         optim-vec-trees (map #(s/fix-tree-times
+                                (newick/build-tree-from-newick-str % 1.0 1.0 optim-c-time-fn))
+                              (env :user-trees))
+         optim-liks (lik/calc-mles gene-trees optim-vec-trees (env :spec-to-lin) (env :theta))
+         optim-newicks (map newick/vector-tree->newick-str optim-vec-trees)
          user-vec-trees (map #(newick/build-tree-from-newick-str % 1.0 1.0) (env :user-trees))
          user-liks (lik/calc-mles gene-trees user-vec-trees (env :spec-to-lin) (env :theta))
-         res {:user-liks user-liks :mle mle :mle-newick mle-newick}]
+         res {:user-liks user-liks :optim-trees optim-newicks :optim-liks optim-liks}]
      (assoc job :results res)))
   
   (print-results
