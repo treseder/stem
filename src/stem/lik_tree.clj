@@ -197,14 +197,16 @@
        (map #(second (first (tree-from-seq (sort-by first %1)))))
        (set)))
 
-(defn get-lik-tree-parts [gene-trees env]
-  (let [gene-matrices  (gene-trees-to-matrices gene-trees (env :lin-to-index))
-        min-gene-matrix (reduce reduce-matrices
-                                (u/make-stem-array (env :mat-size)) gene-matrices)
-        spec-matrix (to-spec-matrix min-gene-matrix env)
-        spec-lst (matrix->sorted-list spec-matrix (env :index-to-spec))
-        tied-trees (find-tied-trees spec-lst)]
-    {:min-gene-matrix min-gene-matrix
-     :spec-matrix spec-matrix
-     :tied-trees tied-trees}))
+(defn get-lik-tree-parts
+  ([gene-trees env] (get-lik-tree-parts gene-trees env true))
+  ([gene-trees env find-tied-trees?]
+   (let [gene-matrices  (gene-trees-to-matrices gene-trees (env :lin-to-index))
+         min-gene-matrix (reduce reduce-matrices
+                                 (u/make-stem-array (env :mat-size)) gene-matrices)
+         spec-matrix (to-spec-matrix min-gene-matrix env)
+         spec-lst (matrix->sorted-list spec-matrix (env :index-to-spec))
+         tied-trees (if find-tied-trees? (find-tied-trees spec-lst) spec-lst)]
+     {:min-gene-matrix min-gene-matrix
+      :spec-matrix spec-matrix
+      :tied-trees tied-trees})))
 

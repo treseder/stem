@@ -7,7 +7,7 @@
             [clojure.contrib.combinatorics :as comb]))
 
 
-(defn calc-mle-for-coalescent-event
+(defn calc-lik-for-coalescent-event
   [num-lins two-div-theta start end leaving?]
   (let [comb (* num-lins (- num-lins 1))
         time-dif (util/zero->tiny-num (- end start))
@@ -16,7 +16,7 @@
         ret-mle (Math/log (if (zero? mle) (Double/MIN_VALUE) mle))]
     ret-mle))
 
-(defn calc-mle-for-branch
+(defn calc-lik-for-branch
   "TODO: what about c-events that occur at the exact same time?"
   [coal-nodes lins-in-branch num-lins-at-start start end two-div-theta]
   ;; the coal-filter-fn could be refactored out to avoid duplication,
@@ -27,21 +27,21 @@
                               (set/subset? c-lins lins-in-branch)))
         ;; events that occurred within branch
         coal-events (filter coal-filter-fn coal-nodes) 
-        mle-fn (fn [[mle num-lins last-c-time] event]
-                 [(+ mle (calc-mle-for-coalescent-event num-lins two-div-theta last-c-time (:c-time event) false)),
+        lik-fn (fn [[mle num-lins last-c-time] event]
+                 [(+ mle (calc-lik-for-coalescent-event num-lins two-div-theta last-c-time (:c-time event) false)),
                   (- num-lins 1),
                   (:c-time event)])
-        [cum-mle rem-num-lins last-c-time] (reduce mle-fn [0 num-lins-at-start start] coal-events)]
+        [cum-mle rem-num-lins last-c-time] (reduce lik-fn [0 num-lins-at-start start] coal-events)]
     ;; at the end of each branch, the probability that the remaining
     ;; lineages don't coalesce must be calculated
     (let [ret-mle (if (> rem-num-lins 1)
                     [(+ cum-mle
-                        (calc-mle-for-coalescent-event
+                        (calc-lik-for-coalescent-event
                          rem-num-lins two-div-theta last-c-time end true)), rem-num-lins]
                     [cum-mle, rem-num-lins])]
       ret-mle)))
 
-(defn calc-mle-for-branches
+(defn calc-lik-for-branches
   "Calculates mle for each branch and returns a vector of the form:
   [cum-mle free-lins start-time].  Each branch mle is computed in the
   parent node because the calc needs the stop time of the molecular
@@ -53,11 +53,11 @@
         [0 cum-lins (count cum-lins) 0])
       (let [end-time (:c-time n)
             ;; depth traversal - gets to bottom of tree and works up
-            [l-cum-mle l-lins l-num-lins l-time] (calc-mle-for-branches l coal-nodes spec-to-lin two-div-theta)
-            [r-cum-mle r-lins r-num-lins r-time] (calc-mle-for-branches r coal-nodes spec-to-lin two-div-theta)
+            [l-cum-mle l-lins l-num-lins l-time] (calc-lik-for-branches l coal-nodes spec-to-lin two-div-theta)
+            [r-cum-mle r-lins r-num-lins r-time] (calc-lik-for-branches r coal-nodes spec-to-lin two-div-theta)
             ;; calculating the two branches from this node to its two descendents
-            [l-mle l-end-lins] (calc-mle-for-branch coal-nodes l-lins l-num-lins l-time end-time two-div-theta)
-            [r-mle r-end-lins] (calc-mle-for-branch coal-nodes r-lins r-num-lins r-time end-time two-div-theta)
+            [l-mle l-end-lins] (calc-lik-for-branch coal-nodes l-lins l-num-lins l-time end-time two-div-theta)
+            [r-mle r-end-lins] (calc-lik-for-branch coal-nodes r-lins r-num-lins r-time end-time two-div-theta)
             cum-mle (+ l-cum-mle r-cum-mle l-mle r-mle)]
         [cum-mle (set/union l-lins r-lins) (+ l-end-lins r-end-lins) end-time]))))
 
@@ -71,24 +71,25 @@
 
 (def counter (let [count (ref 0)] #(dosync (alter count inc))))
 
-(defn calc-mle-for-tree
+(defn calc-lik-for-tree
   "Calculates the maximum likelihood estimate given a
   gene tree matrix and a species tree"
   [gene-tree s-tree spec-to-lin two-div-theta]
   (let [coal-nodes (tree->sorted-internal-nodes gene-tree)
-        [tree-mle coaled-lins num-lins end-time] (calc-mle-for-branches s-tree coal-nodes spec-to-lin two-div-theta)
+        [tree-mle coaled-lins num-lins end-time] (calc-lik-for-branches s-tree coal-nodes spec-to-lin two-div-theta)
         ;; there could still be coalescent events that occur *before* (or
         ;; after, depending on outlook) the first speciation event
-        [before-tree-mle _] (calc-mle-for-branch coal-nodes coaled-lins
+        [before-tree-mle _] (calc-lik-for-branch coal-nodes coaled-lins
                                                  num-lins end-time
                                                  Double/POSITIVE_INFINITY
                                                  two-div-theta)]
+;    (println (str "tree lik: " (+ tree-mle before-tree-mle)))
     (+ tree-mle before-tree-mle)))
 
-(defn calc-mle
+(defn calc-lik
   [gene-trees s-tree spec-to-lin theta]
-  (reduce #(+ %1 (calc-mle-for-tree (:vec-tree %2) s-tree spec-to-lin (/ 2 theta))) 0 gene-trees))
+  (reduce #(+ %1 (calc-lik-for-tree (:vec-tree %2) s-tree spec-to-lin (/ 2 theta))) 0 gene-trees))
 
-(defn calc-mles
+(defn calc-liks
   [gene-trees s-trees spec-to-lin theta]
-  (map #(calc-mle gene-trees % spec-to-lin theta) s-trees))
+  (map #(calc-lik gene-trees % spec-to-lin theta) s-trees))

@@ -52,21 +52,6 @@
         r-specs (if (empty? r-descs) #{r-name} r-descs)]
     (util/min-coal-time-for-node l-specs r-specs spec-mat spec-to-index)))
 
-(defn old-optimized-c-time
-  "Computes the coalescent times for optimized trees using the D-AB matrix, i.e., the
-  min-species-matrix times"
-  [spec-to-index spec-mat left right]
-  (let [[{l-name :name l-descs :desc} _ _] left
-        [{r-name :name r-descs :desc} _ _] right
-        l-specs (if (empty? l-descs) #{l-name} l-descs)
-        r-specs (if (empty? r-descs) #{r-name} r-descs)        
-        cross-prod (for [i l-specs j r-specs] [i j])
-        min-branch-fn (fn [min-time [l-spec r-spec]]
-                        (let [new-time (util/get-from-upper-triangular
-                                        spec-mat (spec-to-index l-spec) (spec-to-index r-spec))]
-                          (min new-time min-time)))]
-    (reduce min-branch-fn Double/POSITIVE_INFINITY cross-prod)))
-
 (defn merge-desc
   "Builds the descendent set of a parent given its direct descendent nodes"  
   [n1 n2]
@@ -142,21 +127,27 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; functions to generate newick-str from tree ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn rec-tree->newick-str [node p-time]
+(defn rec-tree->newick-str [node p-time branch-str]
   (if (is-leaf? node)
-    (str (first node) ":"  (util/format-time p-time))
+    (str (first node) ":"  (util/format-time p-time) branch-str)
     (let [[time l r] node]
-      (str "(" (rec-tree->newick-str l time) ","
-           (rec-tree->newick-str r time) ")" ":"
-           (util/format-time (- p-time time))))))
+      (str "(" (rec-tree->newick-str l time branch-str) ","
+           (rec-tree->newick-str r time branch-str) ")" ":"
+           (util/format-time (- p-time time))
+           branch-str))))
 
 (defn tree->newick-str 
   "Turns the likelihood tree data structure:
-  [time [time [name] [name]] [name]
-  into a newick tree"
-  [tree]
+
+  [time [time [name] [name]] [name] ...]
+
+  into a newick tree.   branch-str is any str thats printed after
+  branch lengths - mainly to output trees to be used by bootstrapping in R."
+  ([tree] (tree->newick-str tree ""))
+  ([tree branch-str]
   (let [[n l r] tree]
-    (str "(" (rec-tree->newick-str l n) ","  (rec-tree->newick-str r n) ");" )))
+    (str "(" (rec-tree->newick-str l n branch-str) ","
+         (rec-tree->newick-str r n branch-str) ");" ))))
 
 (defn rec-vector-tree->newick-str
   [branch p-time]
@@ -168,7 +159,7 @@
            (util/format-time (- p-time c-time))))))
 
 (defn vector-tree->newick-str
-  "Turns any vector nested tree into a newick string"
+  "Turns any vector nested tree into a newick string."
   [tree]
   (let [[{c-time :c-time} l r] tree]
     (str "(" (rec-vector-tree->newick-str l c-time) ","

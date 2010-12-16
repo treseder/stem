@@ -25,7 +25,7 @@
   (testing "search with 100 iterations, seed = 1"
     (let [results (get-results "settings-rattle.yaml")]
       (is (= -10786.177600241292 ((first (:best-trees results)) 0)))
-      (is (= -11264.848840241293 ((last (:best-trees results)) 0)))      
+      (is (= -13609.008520241292 ((last (:best-trees results)) 0)))      
       (is (= 10 (count (:best-trees results)))))))
 
 (deftest user-trees
@@ -33,7 +33,7 @@
     (let [results (get-results "simplesettings-user.yaml")]
       (is (= '(-1610.6688720371628 -1597.5895120371629 -56.63839947216076)
              (:user-liks results)))
-      (is (= '(-53.63745947216077 -56.63719947216076 -56.63839947216076)
+      (is (= '(-53.63717947216077 -56.63683947216076 -56.63719947216075)
              (:optim-liks results))))))
 
 (def user-test-trees

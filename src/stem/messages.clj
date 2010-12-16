@@ -2,7 +2,8 @@
   (:use [stem.constants])
   (:require [clojure.contrib.str-utils2 :as s]
             [clojure.contrib.seq-utils :as s-utils]
-            [stem.util :as util]))
+            [stem.util :as util]
+            [stem.newick :as n]))
 
 (def e-strs {:yaml "An error occurred parsing the settings file."
              :theta "A value for theta must be present in the settings file."
@@ -30,9 +31,33 @@
     (println "\n\n****************Results*****************\n")
     (println "D_AB Matrix:")
     (util/print-array species-matrix)
-    (println (str "\nLikelihood Species Tree (Newick format):\n\n" species-tree))
-    (println-if (> tt 1) (str "\nNOTE: There were " tt " trees that have the same Log likelihood.  These trees will be output to the 'mle.tre' file."))
-    (println (str "\nLog likelihood for tree: " mle))))
+    (println (str "\nMaximum Likelihood Species Tree (Newick format):\n\n" species-tree))
+    (println-if (> tt 1) (str "\nNOTE: There were at least" tt " trees that have the same log likelihood.  These trees will be output to the 'mle.tre' file."))
+    (println (str "\nlog likelihood for tree: " mle))))
+
+(defn print-hyb-job [{:keys [props env gene-trees]}]
+  (println "The settings file was successfully parsed...\n")
+  (println (str "Using theta = " (env :theta) "\n"))
+  (println (str "The settings file contained " (count (env :spec-set)) " species and " (count (env :lin-set)) " lineages.\n"))
+  (println "The species-to-lineage mappings are:\n")
+  (doseq [[k v] (env :spec-to-lin)] (println (str k ": " (apply str (interpose ", " v)))))
+  (println "\nHybridization params:\n")
+  (println (str "Hybrid species: " (get props "hybrid_species")))
+  (println (str "\nHybrid input tree:\n"))
+  (println (env :hybrid-newick)))
+
+(defn print-hyb-results
+  [{:keys [species-matrix hybrid-trees gammas k aic]}]
+  (println "\n\n****************Results*****************\n")
+  (println "Hybrid resolution trees:\n")
+  (doseq [t hybrid-trees] (println (n/vector-tree->newick-str t)))
+  (println "\nD_AB Matrix:")
+  (util/print-array species-matrix)  
+  (println (str "\nMaximum log likelihood: " (first gammas) "\n"))
+  (let [idv (map vector (iterate inc 1) (second gammas))]
+    (doseq [[idx val] idv] (println (str "gamma" idx ": " val ))))
+  (println (str "\nk: " k))
+  (println (str "\nAIC: " aic)))
 
 (defn print-lik-job [{:keys [props env gene-trees]}]
   (println "The settings file was successfully parsed...\n")
@@ -64,19 +89,12 @@
   (doseq [[tree lik] (partition 2 (interleave user-newicks user-liks))]
     (println "User tree: ")
     (println tree)
-    (println (str "Log likelihood for tree: " lik "\n")))
+    (println (str "log likelihood for tree: " lik "\n")))
   (println "\n**************Optimized Trees************\n")
   (doseq [[tree lik] (partition 2 (interleave optim-trees optim-liks))]
     (println "Optimized user tree: ")
     (println tree)
-    (println (str "Log likelihood: " lik "\n"))))
-
-(defn yaml-message [prop-map]
-  (println "Successfully parsed the settings file")
-  (flush))
-
-(defn theta-message [theta]
-  (println "Using theta =" theta) (println) (flush))
+    (println (str "log likelihood: " lik "\n"))))
 
 (defn lin-set-message [s]
   (println "There are" (count s) "lineages:")

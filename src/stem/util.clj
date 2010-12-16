@@ -154,6 +154,7 @@
 (defn get-from-upper-triangular
   "Assumes matrix is upper triangular"
   [matrix i j]
+  (when (nil? matrix) (println "Matrix is nil"))
   (if (< i j)
     (aget! matrix i j)
     (aget! matrix j i)))

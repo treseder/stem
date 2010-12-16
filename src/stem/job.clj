@@ -7,7 +7,8 @@
             [clojure.string :as str]
             [stem.lik-tree :as lt]
             [stem.search :as s]
-            [stem.gene-tree :as g-tree])
+            [stem.gene-tree :as g-tree]
+            [stem.hybrid :as h])
   (:import [java.io BufferedReader FileReader]
            [org.yaml.snakeyaml Yaml]))
 
@@ -30,15 +31,32 @@
   
   (print-job
    [job]
+   (m/print-hyb-job job)
    job)
   
   (run
    [job]
-   (let [{:keys [tied-trees spec-matrix]} (lt/get-lik-tree-parts gene-trees env)]
-     job))
+   (let [{:keys [spec-matrix]} (lt/get-lik-tree-parts gene-trees env false)
+         h-specs (str/split (u/remove-whitespace (get props "hybrid_species" )) #",")
+         optim-c-time-fn (partial newick/optimized-c-time (env :spec-to-index) spec-matrix)
+         optim-hybrid-tree (h/fix-tree-times
+                            (newick/build-tree-from-newick-str
+                             (env :hybrid-newick) 1.0 1.0 optim-c-time-fn)
+                            spec-matrix
+                            (env :spec-to-index)
+                            (set h-specs))
+         hybrid-trees (map #(h/fix-tree-times % spec-matrix (env :spec-to-index) (set h-specs))
+                           (h/make-hybrid-trees-for-specs optim-hybrid-tree h-specs))
+         gammas (h/find-gammas gene-trees hybrid-trees (env :spec-to-lin) (env :theta))
+         k (h/compute-k (count h-specs) (count (env :spec-to-index)))
+         aic (h/compute-aic (first gammas) k)
+         res {:hybrid-trees hybrid-trees, :species-matrix spec-matrix
+              :gammas gammas :k k :aic aic}]
+     (assoc job :results res)))
   
   (print-results
    [job]
+   (m/print-hyb-results results)
    job)
   
   (print-results-to-file
@@ -66,12 +84,14 @@
    (let [{:keys [tied-trees spec-matrix]} (lt/get-lik-tree-parts gene-trees env)
          optim-c-time-fn (partial newick/optimized-c-time (env :spec-to-index) spec-matrix)
          optim-vec-trees (map #(s/fix-tree-times
-                                (newick/build-tree-from-newick-str % 1.0 1.0 optim-c-time-fn))
+                                (newick/build-tree-from-newick-str % 1.0 1.0 optim-c-time-fn)
+                                spec-matrix
+                                (env :spec-to-index))
                               (env :user-trees))
-         optim-liks (lik/calc-mles gene-trees optim-vec-trees (env :spec-to-lin) (env :theta))
+         optim-liks (lik/calc-liks gene-trees optim-vec-trees (env :spec-to-lin) (env :theta))
          optim-newicks (map newick/vector-tree->newick-str optim-vec-trees)
          user-vec-trees (map #(newick/build-tree-from-newick-str % 1.0 1.0) (env :user-trees))
-         user-liks (lik/calc-mles gene-trees user-vec-trees (env :spec-to-lin) (env :theta))
+         user-liks (lik/calc-liks gene-trees user-vec-trees (env :spec-to-lin) (env :theta))
          res {:user-liks user-liks :optim-trees optim-newicks :optim-liks optim-liks}]
      (assoc job :results res)))
   
@@ -102,8 +122,9 @@
    (let [{:keys [min-gene-matrix tied-trees spec-matrix]} (lt/get-lik-tree-parts gene-trees env)
          species-newick (newick/tree->newick-str (first tied-trees))
          species-vec-tree (newick/build-tree-from-newick-str species-newick 1.0 1.0)
-         mle (lik/calc-mle gene-trees species-vec-tree (env :spec-to-lin) (env :theta))
-         res {:tied-trees tied-trees, :species-matrix spec-matrix, :species-tree species-newick, :mle mle}]
+         mle (lik/calc-lik gene-trees species-vec-tree (env :spec-to-lin) (env :theta))
+         res {:tied-trees tied-trees, :species-matrix spec-matrix,
+              :species-tree species-newick, :mle mle}]
      (assoc job :results res)))
   
   (print-results
@@ -116,6 +137,9 @@
    (let [f (get props "mle-filename" *mle-filename-default*)]
      (u/write-lines f (map
                        #(newick/tree->newick-str %)
+                       (:tied-trees results)))
+     (u/write-lines *bootstrap-filename* (map
+                       #(newick/tree->newick-str % (str "#" (env :theta)))
                        (:tied-trees results))))))
 
 (defrecord SearchJob [props env gene-trees results]
@@ -198,7 +222,7 @@
 
 (defn parse-settings-file
   "Reads in the yaml config file and returns a map with the following keys:
-  :files = a map - keys are filenames, values are the constant
+  :files = a map - keys are filenames, values are the rate constant
   :species = a map - keys are species names, values are comma separated lineage names
   :properties = a map with user configurable properties"
   ([] (parse-settings-file (u/get-settings-filename)))
@@ -214,7 +238,7 @@
        s-map)))
 
 (defn parse-user-tree-file [f]
-  (-> (u/with-exc (u/read-file f) "You must specify a species tree in 'user.tre' to compute the likelihood.")
+  (-> (u/with-exc (u/read-file f) (str "You must specify a species tree in '" f "' to compute the likelihood."))
       (u/remove-whitespace)
       (str/split #";")))
 
@@ -223,6 +247,10 @@
         env (create-env s)
         gene-trees (g-tree/get-gene-trees files (env :theta))]
     (case (properties "run")
-          0 (UserTreeJob. properties (assoc env :user-trees (parse-user-tree-file "user.tre")) gene-trees nil)
+          0 (UserTreeJob. properties
+                          (assoc env :user-trees (parse-user-tree-file "user.tre")) gene-trees nil)
           2 (SearchJob. properties env gene-trees nil)
+          3 (HybridJob. properties
+                        (assoc env :hybrid-newick (first (parse-user-tree-file "hybrid.tre")))
+                        gene-trees nil)
           (LikJob. properties env gene-trees nil))))
