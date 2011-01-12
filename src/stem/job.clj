@@ -47,11 +47,12 @@
                             (set h-specs))
          hybrid-trees (map #(h/fix-tree-times % spec-matrix (env :spec-to-index) (set h-specs))
                            (h/make-hybrid-trees-for-specs optim-hybrid-tree h-specs))
+         hybrid-newicks (map newick/vector-tree->newick-str hybrid-trees)
          gammas (h/find-gammas gene-trees hybrid-trees (env :spec-to-lin) (env :theta))
          k (h/compute-k (count h-specs) (count (env :spec-to-index)))
          aic (h/compute-aic (first gammas) k)
          res {:hybrid-trees hybrid-trees, :species-matrix spec-matrix
-              :gammas gammas :k k :aic aic}]
+              :gammas gammas :k k :aic aic :hybrid-newicks hybrid-newicks}]
      (assoc job :results res)))
   
   (print-results
@@ -159,7 +160,7 @@
          species-newick (newick/tree->newick-str (first tied-trees))
          species-vec-tree (newick/build-tree-from-newick-str species-newick 1.0 1.0)]
      (->> (s/search-for-trees species-vec-tree gene-trees spec-matrix props env)
-          (map (fn [[lik vec-tree]] [lik (newick/vector-tree->newick-str vec-tree)]))
+          (map (fn [sr] [(.lik sr) (newick/vector-tree->newick-str (.tree sr))]))
           (hash-map :best-trees)
           (assoc job :results))))
   

@@ -5,6 +5,24 @@
   (:import [java.io File StringReader BufferedReader]
            [java.util Random]))
 
+
+(defn quasi-isomorphic?
+  "Returns true if the two trees are quasi-isomorphic *and* the contents
+  of the leaves match"
+  [t1 t2]
+  (let [[{name1 :name} l1 r1] t1
+        [{name2 :name} l2 r2] t2]
+    (cond
+     ; comparing two leaves
+     (every? nil? [l1 l2 r1 r2]) (= name1 name2)
+     ; compares an internal node and leaf
+     (some nil? [l1 l2 r1 r2]) false
+     :default (or
+               (and (quasi-isomorphic? l1 l2) (quasi-isomorphic? r1 r2))
+               (and (quasi-isomorphic? l1 r2) (quasi-isomorphic? r1 l2))))))
+
+(def in-production? true)
+
 (defmacro with-exc [body message]
   `(try
     ~body
@@ -39,7 +57,7 @@
   (println message)
   (if-not (nil? e)
     (println (.getMessage e)))
-  (if *in-production* (System/exit 1)))
+  (if in-production? (System/exit 1)))
 
 (defmulti abort-if-empty
   (fn [v m]

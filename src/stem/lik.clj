@@ -17,7 +17,6 @@
     ret-mle))
 
 (defn calc-lik-for-branch
-  "TODO: what about c-events that occur at the exact same time?"
   [coal-nodes lins-in-branch num-lins-at-start start end two-div-theta]
   ;; the coal-filter-fn could be refactored out to avoid duplication,
   ;; but who can resist that nice closure
@@ -83,7 +82,6 @@
                                                  num-lins end-time
                                                  Double/POSITIVE_INFINITY
                                                  two-div-theta)]
-;    (println (str "tree lik: " (+ tree-mle before-tree-mle)))
     (+ tree-mle before-tree-mle)))
 
 (defn calc-lik

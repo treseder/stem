@@ -1,9 +1,6 @@
 (ns stem.messages
   (:use [stem.constants])
-  (:require [clojure.contrib.str-utils2 :as s]
-            [clojure.contrib.seq-utils :as s-utils]
-            [stem.util :as util]
-            [stem.newick :as n]))
+  (:require [stem.util :as util]))
 
 (def e-strs {:yaml "An error occurred parsing the settings file."
              :theta "A value for theta must be present in the settings file."
@@ -17,6 +14,7 @@
   `(if ~test
     (println ~form)
     (flush)))
+
 (defn header-message [version]
   (println      "***************************************")
   (println (str "**        Welcome to STEM " version "        **"))
@@ -47,10 +45,10 @@
   (println (env :hybrid-newick)))
 
 (defn print-hyb-results
-  [{:keys [species-matrix hybrid-trees gammas k aic]}]
+  [{:keys [species-matrix hybrid-newicks hybrid-trees gammas k aic]}]
   (println "\n\n****************Results*****************\n")
   (println "Hybrid resolution trees:\n")
-  (doseq [t hybrid-trees] (println (n/vector-tree->newick-str t)))
+  (doseq [t hybrid-newicks] (println t))
   (println "\nD_AB Matrix:")
   (util/print-array species-matrix)  
   (println (str "\nMaximum log likelihood: " (first gammas) "\n"))
@@ -77,7 +75,7 @@
   (println "\nBeginning search now (this could take a while)...\n"))
 
 (defn print-search-results [{:keys [best-trees]}]
-  (println "Search completed.\n")
+  (println "\n\nSearch completed.\n")
   (println "Here are the results (also written to file 'search.tre'):\n")
   (doseq [[lik n-str] best-trees] (println (str "[" (util/format-time lik) "] " n-str))))
 

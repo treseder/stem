@@ -10,10 +10,12 @@
       (is (= -52.43701947216076 (:mle results)))
       (is (= "(Species1:1.20000,(Species4:1.10000,(Species2:1.00000,Species3:1.00000):0.10000):0.10000);" (:species-tree results))))))
 
-(deftest test-tied-trees
-  (testing "tied trees"
-    (let [results (get-results "settings-ties.yaml")]
-      (is (= 3 (count (:tied-trees results)))))))
+
+(comment
+  (deftest test-tied-trees
+   (testing "tied trees"
+     (let [results (get-results "settings-ties.yaml")]
+       (is (= 3 (count (:tied-trees results))))))))
 
 (deftest test-missing-data
   (testing "missing data"

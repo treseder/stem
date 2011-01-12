@@ -13,4 +13,4 @@
   (-> (j/create-job (first args)) (j/pre-run-check) (j/print-job) (j/run) (j/print-results)
       (j/print-results-to-file))
   (m/print-done)
-  (if *in-production* (System/exit 0)))
+  (if util/in-production? (System/exit 0)))
