@@ -160,7 +160,7 @@
          species-newick (newick/tree->newick-str (first tied-trees))
          species-vec-tree (newick/build-tree-from-newick-str species-newick 1.0 1.0)]
      (->> (s/search-for-trees species-vec-tree gene-trees spec-matrix props env)
-          (map (fn [sr] [(.lik sr) (newick/vector-tree->newick-str (.tree sr))]))
+          (map (fn [[lik tree]] [lik (newick/vector-tree->newick-str tree)]))
           (hash-map :best-trees)
           (assoc job :results))))
   
@@ -231,7 +231,8 @@
      (let [f (if (nil? file-name) (u/get-settings-filename) file-name)
            yaml (Yaml.)
            yaml-map (u/with-exc
-                      (.load yaml (str/replace (slurp f) "\t" "  ")) (m/e-strs :yaml))
+                      (.load yaml (str/replace (u/read-file f) "\t" "  ")) (m/e-strs :yaml))
+           ; changes a yaml-map to a clojure map
            s-map (zipmap (map keyword (.keySet yaml-map))
                          (map #(into {} %) (.values yaml-map)))]
        (doseq [k [:properties :species]]

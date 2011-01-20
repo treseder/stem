@@ -34,7 +34,7 @@
 (defn parse-gene-tree-file
   "Returns a sequence of gene-tree structs found in file-name"
   [file-name theta & [rate]]
-  (let [file-str (util/remove-whitespace (slurp file-name))
+  (let [file-str (util/remove-whitespace (util/read-file file-name))
         newick-strs (str/split file-str #";")]
     (map #(parse-gene-tree-str % theta rate) newick-strs)))
 

@@ -11,11 +11,11 @@
       (is (= "(Species1:1.20000,(Species4:1.10000,(Species2:1.00000,Species3:1.00000):0.10000):0.10000);" (:species-tree results))))))
 
 
-(comment
-  (deftest test-tied-trees
-   (testing "tied trees"
-     (let [results (get-results "settings-ties.yaml")]
-       (is (= 3 (count (:tied-trees results))))))))
+(deftest test-tied-trees
+  (testing "tied trees"
+    (let [results (get-results "settings-ties.yaml")]
+      (is (= 2.5587230833596726 (first (first (:best-trees results)))))
+      (is (= -2.241436916640327 (first (nth (:best-trees results) 3)))))))
 
 (deftest test-missing-data
   (testing "missing data"

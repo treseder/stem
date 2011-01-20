@@ -6,27 +6,6 @@
              [stem.newick :as n]
              [clojure.zip :as z]))
 
-(deftype SearchResult [lik tree]
-  Object
-  (toString
-   [sr]
-   (str lik ":" tree))
-  (equals
-   [sr other]
-   (and (= lik (.lik other)) (u/quasi-isomorphic? tree (.tree other))))
-  (hashCode
-   [sr]
-   (int lik))
-  
-  Comparable
-  (compareTo
-   [sr sr2]
-   (cond
-    (= sr sr2) 0
-    (> (.lik sr) (.lik sr2)) -1
-    (< (.lik sr) (.lik sr2)) 1
-    :default (compare (str tree) (str (.tree sr2))))))
-
 (defn fix-root
   [loc min-c-time]
   (let [[{name :name c-time :c-time desc :desc}] (z/node loc)]
@@ -131,14 +110,27 @@
 
 (defn maybe-add-to-best
   [lik tree trees keep-n]
-  (let [min-sr (last trees)]
-    (cond (< (count trees) keep-n) (conj trees (SearchResult. lik tree))
-          (>= lik (.lik min-sr)) (-> (conj trees (SearchResult. lik tree)) (disj min-sr))
+  (let [min-sr (last trees)
+        new-entry [lik tree]]
+    (cond (< (count trees) keep-n) (conj trees new-entry)
+          (>= lik (first min-sr)) (-> (conj trees new-entry) (disj min-sr))
           :default trees)))
 
 (defn print-perc-complete
+  "prints % complete to out so users have some idea
+  when the search will finish"
   [percent]
   (do (print "\r") (print (str percent "%") "completed") (flush)))
+
+(defn sort-fn
+  [[lik tree] [lik2 tree2]]
+  ;(swank.core/break)
+  (cond
+   (> lik lik2) -1
+   (< lik lik2) 1
+   (and (= lik lik2) (u/quasi-isomorphic? tree tree2)) 0
+   :default (compare (n/vector-tree->newick-str tree)
+                     (n/vector-tree->newick-str tree2))))
 
 (defn search-for-trees
   [s-vec-tree gene-trees spec-matrix props env]
@@ -152,7 +144,7 @@
    (loop [prev-lik (l/calc-lik gene-trees s-vec-tree (:spec-to-lin env) theta)
           curr-tree s-vec-tree
           ;; sorted, descending, by likelihood
-          best-trees (-> (sorted-set) (conj (SearchResult. prev-lik curr-tree)))
+          best-trees (sorted-set-by sort-fn [prev-lik curr-tree])
           c0 (* (- prev-lik) 0.25)
           max-lik-change 0.0
           iter 1]
@@ -172,17 +164,3 @@
            (recur prev-lik curr-tree best-trees next-c0
                   (max abs-dif max-lik-change) (inc iter))))))))
 
-(comment
-
-(def t2 [{:name 0} [{:name 1} [{:name 2}] [{:name 3}]] [{:name 4}]])
-(def t1 [{:name 0} [{:name 1} [{:name 3}] [{:name 2}]] [{:name 4}]])
-(def t3 [{:name 0} [{:name 1} [{:name 4}] [{:name 2}]] [{:name 3}]])
-(def t4 [{:name 0} [{:name 1} [{:name 4}] [{:name 3}]] [{:name 2}]])
-(def sr1 (SearchResult. 1 t1))
-(def sr2 (SearchResult. 1 t2))
-(def sr3 (SearchResult. 1 t3))
-(def sr4 (SearchResult. 1 t4))
-(def ss (sorted-set))
-(def s (reduce conj ss [sr1 sr3 sr4 sr2]))
-
-)

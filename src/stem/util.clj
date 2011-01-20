@@ -2,7 +2,7 @@
   (:use [clojure.pprint] [stem.constants])
   (:require [clojure.string :as str]
             [clojure.java.io :as io])
-  (:import [java.io File StringReader BufferedReader]
+  (:import [java.io File StringReader BufferedReader FileNotFoundException]
            [java.util Random]))
 
 
@@ -15,8 +15,10 @@
     (cond
      ; comparing two leaves
      (every? nil? [l1 l2 r1 r2]) (= name1 name2)
-     ; compares an internal node and leaf
+     ; compares a branch and leaf
      (some nil? [l1 l2 r1 r2]) false
+     ; compares two branches: either the left nodes of each are equal
+     ; or the left and right of each are equal
      :default (or
                (and (quasi-isomorphic? l1 l2) (quasi-isomorphic? r1 r2))
                (and (quasi-isomorphic? l1 r2) (quasi-isomorphic? r1 l2))))))
@@ -29,6 +31,7 @@
     (catch Exception e# (stem.util/abort ~message e#))))
 
 (defn rand-generator
+  "Returns a random number generator given a seed."
   [& [seed]]
   (let [rg (if seed (Random. seed) (Random.))]
     (fn [& [type n]] (if (= type :int) (.nextInt rg n) (.nextDouble rg)))))
@@ -53,11 +56,16 @@
     {:next #(swap! c inc)
      :reset #(reset! c init-val)}))
 
-(defn abort [message e]
-  (println message)
-  (if-not (nil? e)
-    (println (.getMessage e)))
-  (if in-production? (System/exit 1)))
+(defn abort
+  ([message] (abort message nil))
+  ([message e]
+     (println message)
+     (when e
+       (println (.getMessage e)))
+     (when in-production?
+       (do
+         (println "\nExiting STEM...")
+         (System/exit 1)))))
 
 (defmulti abort-if-empty
   (fn [v m]
@@ -88,7 +96,10 @@
 (defmethod to-double java.lang.Double [i] i)
 
 (defn read-file [f]
-  (slurp f))
+  (try
+    (slurp f)
+    (catch FileNotFoundException e
+      (abort (str "File " f " not found.")))))
 
 (defn write-to-file [f str]
   (spit f str))
@@ -128,7 +139,6 @@
   'settings', or 'settings.txt', or 'settings.yaml', in that order"
   []
   (first (sort (filter contains-settings? (. (File. ".") list)))))
-
 
 (defn remove-whitespace [s]
   (str/replace s #"\s" ""))
@@ -172,7 +182,6 @@
 (defn get-from-upper-triangular
   "Assumes matrix is upper triangular"
   [matrix i j]
-  (when (nil? matrix) (println "Matrix is nil"))
   (if (< i j)
     (aget! matrix i j)
     (aget! matrix j i)))
