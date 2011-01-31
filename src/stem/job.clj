@@ -48,7 +48,7 @@
          hybrid-trees (map #(h/fix-tree-times % spec-matrix (env :spec-to-index) (set h-specs))
                            (h/make-hybrid-trees-for-specs optim-hybrid-tree h-specs))
          hybrid-newicks (map newick/vector-tree->newick-str hybrid-trees)
-         gammas (h/find-gammas gene-trees hybrid-trees (env :spec-to-lin) (env :theta))
+         gammas (h/find-gammas gene-trees hybrid-trees (env :spec-to-lin) (env :theta) (count h-specs))
          k (h/compute-k (count h-specs) (count (env :spec-to-index)))
          aic (h/compute-aic (first gammas) k)
          res {:hybrid-trees hybrid-trees, :species-matrix spec-matrix

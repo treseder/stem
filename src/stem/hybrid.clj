@@ -3,8 +3,57 @@
   (:require [stem.newick :as n]
             [stem.lik :as l]
             [stem.util :as u]
-            [clojure.zip :as z]))
+            [clojure.zip :as z]
+            [clojure.contrib.combinatorics :as c]))
 
+
+(defn seq-gamma-vals
+  "Returns a lazy sequence of lists, each containing possible
+  gamma values for n gammas, e.g. for two gammas:
+  (0 0) (0 0.01) (0 0.02)...(0.01 0) (0.01 0.01)...(1.0 1.0)"
+  [n]
+  (apply c/cartesian-product (repeatedly n #(range 0 1 0.01))))
+
+(defn seq-gamma-coefs
+  "Returns the seq of multiplied gammas that are the coefficients used in computing
+  the likelihood for each iteration."
+  [gs]
+  (let [gs-with-comp (interleave gs (map #(- 1 %) gs)) ; adds 1 - gamma for each gamma
+        gammas-cp (apply c/cartesian-product (partition 2 gs-with-comp))]
+    (map #(apply * %) gammas-cp)))
+
+(defn seq-liks-for-gtree
+  "Returns a seq of likelihoods of a gene-tree given a seq of species trees"
+  [spec-trees memo-lik-fn spec-to-lin theta g-tree]
+  ; takes exp because the lik function returns the log likelihood
+  (map #(Math/exp (memo-lik-fn (:vec-tree g-tree) % spec-to-lin (/ 2 theta))) spec-trees))
+
+(defn lik-for-gammas
+  "Given a seq of possible gamma values, compute the likelihood"
+  [gs g-trees lik-for-gtree-fn]
+  (let [g-coefs (seq-gamma-coefs gs)]
+    (reduce
+     (fn [total g-tree]
+       (+ total
+          (Math/log (->> (map * (lik-for-gtree-fn g-tree) g-coefs)
+                         (reduce + 0)))))
+     0
+     g-trees)))
+
+(defn find-gammas
+  "Search for and return gammas that produce the largest likelihood"
+  [g-trees spec-trees spec-to-lin theta num-hyb-events]
+  (let [seq-gamma-vals (seq-gamma-vals num-hyb-events)
+        memo-lik-fn (memoize l/calc-lik-for-tree)
+        lik-gtree-fn (partial seq-liks-for-gtree spec-trees memo-lik-fn spec-to-lin theta)]
+    (reduce
+     (fn [[lik curr-gammas] new-gammas]
+       (let [new-lik (lik-for-gammas new-gammas g-trees lik-gtree-fn)]
+         (if (> new-lik lik)
+           [new-lik new-gammas]
+           [lik curr-gammas])))
+     [Double/NEGATIVE_INFINITY (first seq-gamma-vals)]
+     seq-gamma-vals)))
 
 (defn compute-aic
   [lik k]
@@ -13,42 +62,6 @@
 (defn compute-k
   [hybs specs]
   (+ hybs (- specs 1)))
-
-(defn find-gamma-2
-  [g-trees spec-trees spec-to-lin theta])
-
-(defn reduce-gene-trees
-  [lik-memo g-trees spec-trees spec-to-lin theta gamma]
-  (let [[spt1 spt2] spec-trees
-        prob (reduce
-              (fn [total gene-tree]
-                (let [p1 (* gamma (Math/exp (lik-memo (:vec-tree gene-tree) spt2 spec-to-lin (/ 2 theta))))
-                      p2 (* (- 1 gamma) (Math/exp (lik-memo (:vec-tree gene-tree) spt1 spec-to-lin (/ 2 theta))))]
-                  ;(println (str "p1 p2: " p1 " " p2))
-                  (+ total (Math/log (+ p1 p2)))))
-              0 g-trees)]
-    prob))
-
-(defn find-gamma-1
-  [g-trees spec-trees spec-to-lin theta]
-  (let [lik-memo (memoize l/calc-lik-for-tree)
-        gamma-fn (partial reduce-gene-trees lik-memo g-trees spec-trees spec-to-lin theta)]
-    (reduce
-     (fn [[curr-lik gamma] new-gamma]
-       (let [new-lik (gamma-fn new-gamma)]
-         (if (> new-lik curr-lik)
-           [new-lik [new-gamma]]
-           [curr-lik gamma])))
-     [Double/NEGATIVE_INFINITY [0]]
-     (range 0 1 0.01))))
-
-
-(defn find-gammas
-  [g-trees spec-trees spec-to-lin theta]
-  (if (= (count spec-trees) 2)
-    (find-gamma-1 g-trees spec-trees spec-to-lin theta)
-    (find-gamma-2 g-trees spec-trees spec-to-lin theta)))
-
 
 ;; functions to build hybrid trees based on selected hybrid
 (defn fix-root

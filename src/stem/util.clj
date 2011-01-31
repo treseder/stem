@@ -23,7 +23,7 @@
                (and (quasi-isomorphic? l1 l2) (quasi-isomorphic? r1 r2))
                (and (quasi-isomorphic? l1 r2) (quasi-isomorphic? r1 l2))))))
 
-(def in-production? true)
+(def in-production? false)
 
 (defmacro with-exc [body message]
   `(try
