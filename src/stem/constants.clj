@@ -7,7 +7,7 @@
 ;; REPL session.  This should be set to true before generating the
 ;; uber jar
 
-(def *internal-node-name* "internal")
+(def *internal-node-name* "int")
 (def *root-name* "stem-root")
 
 (def *num-saved-trees-default* 10)

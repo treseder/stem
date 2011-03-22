@@ -123,7 +123,7 @@
          [(create-node *root-name* 0.0 c-time desc-set) left right])
        (catch Exception e
          (util/abort "An error occured parsing the newick string" e)))))
-
+ 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; functions to generate newick-str from tree ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

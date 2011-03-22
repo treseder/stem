@@ -6,6 +6,27 @@
             [clojure.zip :as z]
             [clojure.contrib.combinatorics :as c]))
 
+(def *min-big-decimal* (BigDecimal/valueOf (Double/MIN_VALUE)))
+(def *min-log* (Math/log (Double/MIN_VALUE)))
+(def *math-cxt* (java.math.MathContext. 5))
+
+(defn exp-with-prec
+  [val]
+  (let [cutoff-exp (int *min-log*)
+        exp-val (Math/exp (/ val (Math/abs cutoff-exp)))]
+    ;using valueOf to get exact representation
+    (.pow (BigDecimal/valueOf exp-val) (Math/abs cutoff-exp) *math-cxt*)))
+
+(defn log-with-prec
+  "big-dec could be too small for log() resutling in -Inf, so to make it 'bigger',
+   use the property that log(a) = nlog(c) + log(a/c^n)"
+  [big-dec]
+  (let [n (int (+ (/ (.scale big-dec) (.scale *min-big-decimal*)) 1))
+        c (Double/MIN_VALUE)
+        nlogc (* (Math/log c) n)
+        cn (.pow *min-big-decimal* n *math-cxt*)
+        a-div-cn (.divide big-dec cn *math-cxt*)]
+    (+ nlogc (Math/log a-div-cn))))
 
 (defn seq-gamma-vals
   "Returns a lazy sequence of lists, each containing possible
@@ -16,27 +37,42 @@
 
 (defn seq-gamma-coefs
   "Returns the seq of multiplied gammas that are the coefficients used in computing
-  the likelihood for each iteration."
+  the likelihood for each iteration of genetrees given the species trees."
   [gs]
-  (let [gs-with-comp (interleave gs (map #(- 1 %) gs)) ; adds 1 - gamma for each gamma
-        gammas-cp (apply c/cartesian-product (partition 2 gs-with-comp))]
+  (let [gs-with-compls (interleave gs (map #(- 1 %) gs)) ; adds 1 - gamma for each gamma
+        gammas-cp (apply c/cartesian-product (partition 2 gs-with-compls))]
     (map #(apply * %) gammas-cp)))
 
 (defn seq-liks-for-gtree
   "Returns a seq of likelihoods of a gene-tree given a seq of species trees"
   [spec-trees memo-lik-fn spec-to-lin theta g-tree]
   ; takes exp because the lik function returns the log likelihood
-  (map #(Math/exp (memo-lik-fn (:vec-tree g-tree) % spec-to-lin (/ 2 theta))) spec-trees))
+  (map #(memo-lik-fn (:vec-tree g-tree) % spec-to-lin (/ 2 theta)) spec-trees))
+
+(defn needs-arb-prec? [lik] (< lik *min-log*))
+
+(defn prob-for-gamma-coefs
+  [liks coefs]
+  (let [sum-with-prec-fn #(.add %2 %1 *math-cxt*)]
+    (if (not-any? needs-arb-prec? liks)
+      ; values aren't too small, use regular math functions
+      (->> (map #(* (Math/exp %1) %2) liks coefs) (reduce + 0) (Math/log))
+      ; uses BigDecimals for arbitrary precision
+      (->> (map #(.multiply (exp-with-prec %1) (BigDecimal/valueOf (double %2)) *math-cxt*)
+                liks coefs)
+           (reduce sum-with-prec-fn (BigDecimal/ZERO))
+           (log-with-prec)))))
 
 (defn lik-for-gammas
-  "Given a seq of possible gamma values, compute the likelihood"
-  [gs g-trees lik-for-gtree-fn]
+  "Given a seq of possible gamma values, find the product (over all genetrees), of the sum
+  of the likelihoods of each genetree given the gamma coefficients and species trees"
+  [gs g-trees liks-for-gtree-fn]
   (let [g-coefs (seq-gamma-coefs gs)]
     (reduce
      (fn [total g-tree]
-       (+ total
-          (Math/log (->> (map * (lik-for-gtree-fn g-tree) g-coefs)
-                         (reduce + 0)))))
+       (let [liks-for-gtree (liks-for-gtree-fn g-tree)
+             prob (prob-for-gamma-coefs liks-for-gtree g-coefs)]
+         (+ total prob)))
      0
      g-trees)))
 
@@ -49,6 +85,7 @@
     (reduce
      (fn [[lik curr-gammas] new-gammas]
        (let [new-lik (lik-for-gammas new-gammas g-trees lik-gtree-fn)]
+         ;(println "Lik + gammas" new-lik new-gammas)
          (if (> new-lik lik)
            [new-lik new-gammas]
            [lik curr-gammas])))
@@ -115,8 +152,6 @@
       (z/root loc)
       (recur (z/next (change-time-for-node loc 1e-10 spec-matrix spec-to-index hybs))))))
 
-
-
 (defn get-fixed-descs [children]
   (let [[[{l-name :name l-descs :desc}] [{r-name :name r-descs :desc}]] children
         r-specs (if-not (empty? r-descs) r-descs #{r-name})
@@ -152,6 +187,8 @@
      :else (recur (z/next loc)))))
 
 (defn make-hybrid-trees-for-spec
+  "Given a species name which represents the 'hybrid' node, makes another tree
+  that resolves the hybrid event."
   [trees spec]
   (reduce
    #(conj %1 %2 (permute-hybrid-tree-for-spec %2 spec))

@@ -23,6 +23,9 @@
                (and (quasi-isomorphic? l1 l2) (quasi-isomorphic? r1 r2))
                (and (quasi-isomorphic? l1 r2) (quasi-isomorphic? r1 l2))))))
 
+(defn zero->min [val]
+  (if-not (zero? val) val (Double/MIN_VALUE)))
+
 (def in-production? false)
 
 (defmacro with-exc [body message]
