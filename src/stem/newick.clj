@@ -12,8 +12,8 @@
   (:use     [clojure.pprint] [stem.constants])
   (:require [clojure.string :as str]
             [stem.util :as util]
-            [clojure.set :as c-set]
-            [vijual :as vij]))
+            [stem.print-tree :as pt]
+            [clojure.set :as c-set]))
 
 ;; :name is a string, :time and :c-time are floats, and :desc is a set
 (defrecord Node [^String name ^double b-len ^double c-time ^clojure.lang.PersistentHashSet desc])
@@ -194,10 +194,10 @@
 
 (defn see-vector-tree
   [vec-tree]
-  (vij/draw-binary-tree (create-drawable-tree vec-tree)))
+  (pt/draw-binary-tree (create-drawable-tree vec-tree)))
 
 (defn see-newick-tree [n-str]
   (-> n-str (build-tree-from-newick-str 1 1) (see-vector-tree)))
 
 (defn see-tree [vec-tree]
-  (vij/draw-binary-tree vec-tree))
+  (pt/draw-binary-tree vec-tree))

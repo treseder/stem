@@ -17,7 +17,6 @@
   (pre-run-check [job])
   (print-job [job])
   (run [job])
-  (search [job])
   (print-results [job])
   (print-results-to-file [job]))
 
@@ -37,15 +36,15 @@
   (run
    [job]
    (let [{:keys [spec-matrix]} (lt/get-lik-tree-parts gene-trees env false)
-         h-specs (str/split (u/remove-whitespace (get props "hybrid_species" )) #",")
+         h-specs (set (str/split (u/remove-whitespace (get props "hybrid_species" )) #","))
          optim-c-time-fn (partial newick/optimized-c-time (env :spec-to-index) spec-matrix)
          optim-hybrid-tree (h/fix-tree-times
                             (newick/build-tree-from-newick-str
                              (env :hybrid-newick) 1.0 1.0 optim-c-time-fn)
                             spec-matrix
                             (env :spec-to-index)
-                            (set h-specs))
-         hybrid-trees (map #(h/fix-tree-times % spec-matrix (env :spec-to-index) (set h-specs))
+                            h-specs)
+         hybrid-trees (map #(h/fix-tree-times % spec-matrix (env :spec-to-index) h-specs)
                            (h/make-hybrid-trees-for-specs optim-hybrid-tree h-specs))
          hybrid-newicks (map newick/vector-tree->newick-str hybrid-trees)
          gammas (h/find-gammas gene-trees hybrid-trees (env :spec-to-lin) (env :theta) (count h-specs))
@@ -256,3 +255,13 @@
                         (assoc env :hybrid-newick (first (parse-user-tree-file "hybrid.tre")))
                         gene-trees nil)
           (LikJob. properties env gene-trees nil))))
+
+(defn run-job
+  [file]
+  (do (-> (create-job file)
+       (pre-run-check)
+       (print-job)
+       (run)
+       (print-results)
+       (print-results-to-file))
+      (println "Finished")))
