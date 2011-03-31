@@ -1,9 +1,16 @@
 (ns stem.util
   (:use [clojure.pprint] [stem.constants])
   (:require [clojure.string :as str]
-            [clojure.java.io :as io])
+            [clojure.java.io :as io]
+            [clojure.zip :as z])
   (:import [java.io File StringReader BufferedReader FileNotFoundException]
            [java.util Random]))
+
+(defn make-tree-zipper
+  "Makes a valid zipper based on the nested tree structure used throughout STEM:
+  [{node info} [left branch][right branch]]"
+  [tree]
+  (z/zipper second rest #(vec (cons (first %1) %2)) tree))
 
 
 (defn quasi-isomorphic?

@@ -36,22 +36,23 @@
   (run
    [job]
    (let [{:keys [spec-matrix]} (lt/get-lik-tree-parts gene-trees env false)
+         spec->idx (env :spec-to-index)
          h-specs (set (str/split (u/remove-whitespace (get props "hybrid_species" )) #","))
-         optim-c-time-fn (partial newick/optimized-c-time (env :spec-to-index) spec-matrix)
-         optim-hybrid-tree (h/fix-tree-times
-                            (newick/build-tree-from-newick-str
-                             (env :hybrid-newick) 1.0 1.0 optim-c-time-fn)
-                            spec-matrix
-                            (env :spec-to-index)
-                            h-specs)
-         hybrid-trees (map #(h/fix-tree-times % spec-matrix (env :spec-to-index) h-specs)
-                           (h/make-hybrid-trees-for-specs optim-hybrid-tree h-specs))
-         hybrid-newicks (map newick/vector-tree->newick-str hybrid-trees)
-         gammas (h/find-gammas gene-trees hybrid-trees (env :spec-to-lin) (env :theta) (count h-specs))
-         k (h/compute-k (count h-specs) (count (env :spec-to-index)))
-         aic (h/compute-aic (first gammas) k)
-         res {:hybrid-trees hybrid-trees, :species-matrix spec-matrix
-              :gammas gammas :k k :aic aic :hybrid-newicks hybrid-newicks}]
+         optim-c-time-fn (partial newick/optimized-c-time spec->idx  spec-matrix)
+         user-parental-tree (newick/newick->tree (env :hybrid-newick) 1.0 1.0 optim-c-time-fn)
+         parental-trees (map #(s/fix-tree-times % spec-matrix spec->idx)
+                             (h/make-parental-trees user-parental-tree h-specs))
+         parental-data (h/parental-trees->parental-data parental-trees gene-trees
+                                                        (env :spec-to-lin) (env :theta))
+         
+         ;; fixes parental tree lengths for hybridization
+         p-trees (map #(h/fix-tree-times % spec-matrix spec->idx h-specs) parental-trees)
+         gamma-top (h/gamma-topology (count h-specs))
+         hybrid-data (map #(h/gamma-topology->hybrid-tree-data
+                            % p-trees gene-trees
+                            (env :spec-to-lin) (env :theta))
+                          gamma-top)
+         res {:species-matrix spec-matrix :hybrid-data hybrid-data :parental-data parental-data}]
      (assoc job :results res)))
   
   (print-results
@@ -84,13 +85,13 @@
    (let [{:keys [tied-trees spec-matrix]} (lt/get-lik-tree-parts gene-trees env)
          optim-c-time-fn (partial newick/optimized-c-time (env :spec-to-index) spec-matrix)
          optim-vec-trees (map #(s/fix-tree-times
-                                (newick/build-tree-from-newick-str % 1.0 1.0 optim-c-time-fn)
+                                (newick/newick->tree % 1.0 1.0 optim-c-time-fn)
                                 spec-matrix
                                 (env :spec-to-index))
                               (env :user-trees))
          optim-liks (lik/calc-liks gene-trees optim-vec-trees (env :spec-to-lin) (env :theta))
          optim-newicks (map newick/vector-tree->newick-str optim-vec-trees)
-         user-vec-trees (map #(newick/build-tree-from-newick-str % 1.0 1.0) (env :user-trees))
+         user-vec-trees (map #(newick/newick->tree % 1.0 1.0) (env :user-trees))
          user-liks (lik/calc-liks gene-trees user-vec-trees (env :spec-to-lin) (env :theta))
          res {:user-liks user-liks :optim-trees optim-newicks :optim-liks optim-liks}]
      (assoc job :results res)))
@@ -121,7 +122,7 @@
    [job]
    (let [{:keys [min-gene-matrix tied-trees spec-matrix]} (lt/get-lik-tree-parts gene-trees env)
          species-newick (newick/tree->newick-str (first tied-trees))
-         species-vec-tree (newick/build-tree-from-newick-str species-newick 1.0 1.0)
+         species-vec-tree (newick/newick->tree species-newick 1.0 1.0)
          mle (lik/calc-lik gene-trees species-vec-tree (env :spec-to-lin) (env :theta))
          res {:tied-trees tied-trees, :species-matrix spec-matrix,
               :species-tree species-newick, :mle mle}]
@@ -157,7 +158,7 @@
    [job]
    (let [{:keys [tied-trees spec-matrix]} (lt/get-lik-tree-parts gene-trees env)
          species-newick (newick/tree->newick-str (first tied-trees))
-         species-vec-tree (newick/build-tree-from-newick-str species-newick 1.0 1.0)]
+         species-vec-tree (newick/newick->tree species-newick 1.0 1.0)]
      (->> (s/search-for-trees species-vec-tree gene-trees spec-matrix props env)
           (map (fn [[lik tree]] [lik (newick/vector-tree->newick-str tree)]))
           (hash-map :best-trees)

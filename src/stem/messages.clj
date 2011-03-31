@@ -44,18 +44,21 @@
   (println (str "\nHybrid input tree:\n"))
   (println (env :hybrid-newick)))
 
+(defn gamma-meta->str
+  [g-meta]
+  (reduce #(str %1 " gamma(" (first %2) ") = " (second %2)) "" g-meta))
+
 (defn print-hyb-results
-  [{:keys [species-matrix hybrid-newicks hybrid-trees gammas k aic]}]
+  [{:keys [species-matrix hybrid-data parental-data]}]
   (println "\n\n****************Results*****************\n")
-  (println "Hybrid resolution trees:\n")
-  (doseq [t hybrid-newicks] (println t))
   (println "\nD_AB Matrix:")
-  (util/print-array species-matrix)  
-  (println (str "\nMaximum log likelihood: " (first gammas) "\n"))
-  (let [idv (map vector (iterate inc 1) (second gammas))]
-    (doseq [[idx val] idv] (println (str "gamma" idx ": " val ))))
-  (println (str "\nk: " k))
-  (println (str "\nAIC: " aic)))
+  (util/print-array species-matrix)
+  (println "\n Parental trees:\n")
+  (doseq [d parental-data]
+    (let [gamma-meta (:gamma (meta (:tree d)))]
+      (println gamma-meta->str gamma-meta)
+      (println "Lik:" (:lik d))
+      (println "AIC:" (:aic d)))))
 
 (defn print-lik-job [{:keys [props env gene-trees]}]
   (println "The settings file was successfully parsed...\n")

@@ -6,6 +6,12 @@
             [clojure.zip :as z]
             [clojure.contrib.combinatorics :as c]))
 
+(defrecord HybridTreeData [tree newick g-vals g-map lik k aic])
+
+(defn create-hybrid-tree-data
+  [tree newick g-vals g-map lik k aic]
+  (HybridTreeData. tree newick g-vals g-map lik k aic))
+
 (def *min-big-decimal* (BigDecimal/valueOf (Double/MIN_VALUE)))
 (def *min-log* (Math/log (Double/MIN_VALUE)))
 (def *math-cxt* (java.math.MathContext. 5))
@@ -147,9 +153,10 @@
   "For each node in the tree get the min c-time, and make sure the
   molecular clock holds"
   [tree spec-matrix spec-to-index hybs]
-  (loop [loc (z/zipper second rest #(vec (cons (first %1) %2)) tree)]
+  (loop [loc (u/make-tree-zipper tree)]
     (if (z/end? loc)
-      (z/root loc)
+      ;; make sure new tree has same meta as old
+      (with-meta (z/root loc) (meta tree))
       (recur (z/next (change-time-for-node loc 1e-10 spec-matrix spec-to-index hybs))))))
 
 (defn get-fixed-descs [children]
@@ -170,6 +177,7 @@
     (z/replace gp-loc new-gp-branch)))
 
 (defn change-hybrid-position
+  "Flips the hybrid node to the other possible position in the tree."
   [loc]
   (let [h (z/node loc)
         h-sib (z/node (get-sibling-loc loc))
@@ -178,26 +186,114 @@
         gp-loc (-> p-loc z/up)]
     (z/root (change-grand-parent gp-loc h h-sib (z/node p-loc) p-sib))))
 
-(defn permute-hybrid-tree-for-spec
+(defn permute-tree-at-spec
   [tree spec]
-  (loop [loc (z/zipper second rest #(vec (cons (first %1) %2)) tree)]
+  (loop [loc (u/make-tree-zipper tree)]
     (cond
      (z/end? loc) (z/root loc)
+     ;; is this a hybrid node
      (= (:name (first (z/node loc))) spec) (change-hybrid-position loc)
      :else (recur (z/next loc)))))
 
-(defn make-hybrid-trees-for-spec
+(defn left-or-right-child
+  "Checks if node's children that match name is a left or a right node.
+  Returns {name 0} for left, {name 1} for right"
+  [names [ _ [{l-name :name} _ _] [{r-name :name} _ _]]]
+  (cond
+   (contains? names l-name) {l-name 0}
+   (contains? names  r-name) {r-name 1}
+   :else nil))
+
+(defn add-gamma-meta-to-tree
+  "As a convention, gamma = 0 when the hybrid is a left child, and gamma = 1 when
+  the hybrid node is a right child.  This function returns a map where the hybrid name
+  is the key and the value is a 1, or 0.  This meta-data will be used later on to
+  compute the gamma values and likelihood of hybrid trees."
+  [tree specs]
+  (loop [loc (u/make-tree-zipper tree)
+         gamma-meta {}]
+    (if (z/end? loc)
+      (with-meta tree {:gamma gamma-meta})
+      (if (z/branch? loc)
+        (recur (z/next loc) (merge gamma-meta (left-or-right-child specs (z/node loc)))) 
+        (recur (z/next loc) gamma-meta)))))
+
+(defn add-gamma-meta-to-trees
+  [trees specs]
+  (map #(add-gamma-meta-to-tree % specs) trees))
+
+(defn make-parental-tree
   "Given a species name which represents the 'hybrid' node, makes another tree
   that resolves the hybrid event."
   [trees spec]
   (reduce
-   #(conj %1 %2 (permute-hybrid-tree-for-spec %2 spec))
+   #(conj %1 %2 (permute-tree-at-spec %2 spec))
    '() 
    trees))
 
-(defn make-hybrid-trees-for-specs
+(defn make-parental-trees
   [tree specs]
-  (reduce
-   #(make-hybrid-trees-for-spec %1 %2)
-   [tree]
-   specs))
+  (let [p-trees (reduce #(make-parental-tree %1 %2) [tree] specs)]
+    (add-gamma-meta-to-trees p-trees specs)))
+
+(defn is-gamma-position-eq?
+  "pos1 and pos2 are either 0,1,2, representing the position of the hybrid
+  species.  Essentially, disregard (return true) if the spec is a hybrid (= 2)"
+  [pos1 pos2]
+  (or (= pos1 2) (= pos2 2) (= pos1 pos2)))
+
+(defn is-parental-tree?
+  "Given the gamma meta data for a parental tree, is the parental tree one that
+  should be used to resolve hybridization in the hybrid tree given the hybrid tree's
+  hybrid topology.  See gamma-topology doc-string for more info."
+  [g-top g-meta]
+  (let [logical-vals (map #(is-gamma-position-eq? (% g-top) (% g-meta)) (keys g-top))]
+    (reduce #(and %1 %2) logical-vals)))
+
+(defn p-trees-for-hybrid-tree
+  "Uses the gamma meta data for each tree to find the appropriate parental
+  trees to estimate the hybrid tree.  Uses the gamma topology map
+  (e.g. {hyb1 0, hyb2 2}) to find these trees."
+  [g-top p-trees]
+  (filter #(is-parental-tree? (:gamma (meta %)) g-top) p-trees))
+
+(defn gamma-top->num-hybrids
+  [g-top]
+  (reduce #(+ %1 (if-not (= %2 2) 1 0)) 0 (vals g-top)))
+
+(defn gamma-topology->hybrid-tree-data
+  "Given a gamma topology, i.e. the topology of a hybrid tree, find the gamma
+  value that produces the mle."
+  [gamma-top parental-trees gene-trees spec->lin theta]
+  (let [n-hybrids (gamma-top->num-hybrids gamma-top)
+        p-trees (p-trees-for-hybrid-tree gamma-top parental-trees)
+        gamma-probs (find-gammas gene-trees p-trees spec->lin theta )
+        k (compute-k n-hybrids (count (keys gamma-top)))
+        aic (compute-aic (first gamma-probs) k)]
+    (create-hybrid-tree-data (first p-trees) (n/vector-tree->newick-str (first p-trees))
+                             (second gamma-probs) (first gamma-probs) k aic)))
+
+(defn gamma-topology
+  "For n hybridization events, there are 2^n parental trees, and
+  3^n - 2^n hybrid trees.  Returns a seq of maps, where each map describes
+  the topology of the hybrid tree.  For example, with n = 2 there are 4 parental
+  trees and 5 hybrid trees.  Each hybrid tree has a unique topology described by
+  a map of hybrid positions, e.g. {hyb1 0, hyb2 2}, which means that the first hybrid
+  species is resolved to being a left child, and the 2 means that the second hybrid
+  species needs to be estimated from the parental trees, namely that the two parental
+  trees having a topology of {hyb1 0, hyb2 0} and {hyb1 0, hyb2 1} are used to
+  estimate the gamma of the second hybrid event."
+  [specs]
+  (let [g-seq (filter #(>= (.indexOf % 2) 0) (c/selections [0,1,2] (count specs)))]
+    (map #(apply hash-map (interleave specs %)) g-seq)))
+
+(defn parental-trees->parental-data
+  [parental-trees gene-trees spec->lin theta]
+  (map (fn [p-tree]
+            (let [lik (l/calc-lik gene-trees p-tree spec->lin theta)
+                  newick (n/vector-tree->newick-str p-tree)
+                  k (compute-k 0 (count (keys spec->lin)))
+                  aic (compute-aic lik k)]
+              (create-hybrid-tree-data p-tree newick nil nil lik k aic)
+              ))
+       parental-trees))

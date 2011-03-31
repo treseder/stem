@@ -35,7 +35,7 @@
 
 (defn max-c-time
   "Normal way to compute the coalescent time of a tree given branch lengths
-  in the Newick format.
+  present in the newick tree format.
   Given a parent's left and right children nodes, calculate its c-time"  
   [n1 n2]
   (let [[{l-len :b-len l-time :c-time} _ _] n1
@@ -43,8 +43,8 @@
     (max (+ l-len l-time) (+ r-len r-time))))
 
 (defn optimized-c-time
-  "Computes the coalescent times for optimized trees using the D-AB matrix, i.e., the
-  min-species-matrix times"
+  "Computes the maximum likelihood branch lengths using the D-AB matrix.
+  This function is usually used on trees input by the user."
   [spec-to-index spec-mat left right]
   (let [[{l-name :name l-descs :desc} _ _] left
         [{r-name :name r-descs :desc} _ _] right
@@ -103,12 +103,13 @@
            (add-branch-lens))
        ")"))
 
-(defn build-tree-from-newick-str
+(defn newick->tree
   "Parses s and builds a binary tree structure as a vector of
   vectors.  s must conform to proper Newick format.  If the
   root is named, it is ignored.  Leafs are assumed to contain a
   name:branch-len.  All interior nodes must have a branch-len,
   but not named."
+  ([s] (build-tree-from-newick-str s 1.0 1.0 max-c-time))
   ([s rate theta] (build-tree-from-newick-str s rate theta max-c-time))
   ([s rate theta c-time-fn]
      ((i-node-counter :reset))   ; resets counter for each tree parsed
@@ -192,12 +193,12 @@
       [d-name]
       [d-name (create-drawable-tree left) (create-drawable-tree right)])))
 
-(defn see-vector-tree
+(defn print-vec-tree
   [vec-tree]
   (pt/draw-binary-tree (create-drawable-tree vec-tree)))
 
-(defn see-newick-tree [n-str]
+(defn print-newick-tree [n-str]
   (-> n-str (build-tree-from-newick-str 1 1) (see-vector-tree)))
 
-(defn see-tree [vec-tree]
+(defn print-tree [vec-tree]
   (pt/draw-binary-tree vec-tree))
