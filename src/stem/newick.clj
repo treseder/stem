@@ -109,21 +109,18 @@
   root is named, it is ignored.  Leafs are assumed to contain a
   name:branch-len.  All interior nodes must have a branch-len,
   but not named."
-  ([s] (build-tree-from-newick-str s 1.0 1.0 max-c-time))
-  ([s rate theta] (build-tree-from-newick-str s rate theta max-c-time))
+  ([s] (newick->tree s 1.0 1.0 max-c-time))
+  ([s rate theta] (newick->tree s rate theta max-c-time))
   ([s rate theta c-time-fn]
      ((i-node-counter :reset))   ; resets counter for each tree parsed
-     (try
-       (let [prepped-str (make-str-parseable s)
-             divisor (* rate theta)
-             lst (read-string prepped-str)
-             left (build-tree (first lst) divisor c-time-fn)
-             right (build-tree (second lst) divisor c-time-fn)
-             c-time (c-time-fn left right)
-             desc-set (merge-desc left right)]
-         [(create-node *root-name* 0.0 c-time desc-set) left right])
-       (catch Exception e
-         (util/abort "An error occured parsing the newick string" e)))))
+     (let [prepped-str (make-str-parseable s)
+           divisor (* rate theta)
+           lst (read-string prepped-str)
+           left (build-tree (first lst) divisor c-time-fn)
+           right (build-tree (second lst) divisor c-time-fn)
+           c-time (c-time-fn left right)
+           desc-set (merge-desc left right)]
+       [(create-node *root-name* 0.0 c-time desc-set) left right])))
  
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; functions to generate newick-str from tree ;;
@@ -198,7 +195,7 @@
   (pt/draw-binary-tree (create-drawable-tree vec-tree)))
 
 (defn print-newick-tree [n-str]
-  (-> n-str (build-tree-from-newick-str 1 1) (see-vector-tree)))
+  (-> n-str (newick->tree 1 1) (print-vec-tree)))
 
 (defn print-tree [vec-tree]
   (pt/draw-binary-tree vec-tree))

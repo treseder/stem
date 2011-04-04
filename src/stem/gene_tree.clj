@@ -23,7 +23,7 @@
   [rate-str newick-str theta]
   (let [rate (util/to-double rate-str)]
     (create-gene-tree
-     (newick/build-tree-from-newick-str newick-str rate theta)
+     (newick/newick->tree newick-str rate theta)
      rate)))
 
 (defn parse-gene-tree-str

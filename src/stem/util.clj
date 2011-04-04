@@ -201,4 +201,8 @@
   (reduce
    min
    (for [l-spec l-specs r-spec r-specs]
-     (get-from-upper-triangular spec-mat (spec-to-idx l-spec) (spec-to-idx r-spec)))))
+     (let [lid (spec-to-idx l-spec)
+           rid (spec-to-idx r-spec)]
+       (when (some nil? [lid rid])
+         (abort (str "Either " l-spec " or " r-spec " does not match the lineages and species entered in the settings file.")))
+       (get-from-upper-triangular spec-mat lid rid)))))

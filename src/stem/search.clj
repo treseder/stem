@@ -46,7 +46,7 @@
   [tree spec-matrix spec-to-index]
   (loop [loc (z/zipper second rest #(vec (cons (first %1) %2)) tree)]
     (if (z/end? loc)
-      (z/root loc)
+      (with-meta (z/root loc) (meta tree))
       (recur (z/next (change-time-for-node loc 1e-10 spec-matrix spec-to-index))))))
 
 (defn find-target-node

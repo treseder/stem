@@ -46,10 +46,9 @@
                                                         (env :spec-to-lin) (env :theta))
          
          ;; fixes parental tree lengths for hybridization
-         p-trees (map #(h/fix-tree-times % spec-matrix spec->idx h-specs) parental-trees)
-         gamma-top (h/gamma-topology (count h-specs))
+         gamma-top (h/gamma-topologys h-specs)
          hybrid-data (map #(h/gamma-topology->hybrid-tree-data
-                            % p-trees gene-trees
+                            % parental-trees gene-trees spec-matrix spec->idx
                             (env :spec-to-lin) (env :theta))
                           gamma-top)
          res {:species-matrix spec-matrix :hybrid-data hybrid-data :parental-data parental-data}]
@@ -59,7 +58,7 @@
    [job]
    (m/print-hyb-results results)
    job)
-  
+ 
   (print-results-to-file
    [job]
    job))
@@ -263,6 +262,5 @@
        (pre-run-check)
        (print-job)
        (run)
-       (print-results)
-       (print-results-to-file))
+       (print-results))
       (println "Finished")))

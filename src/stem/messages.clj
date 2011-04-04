@@ -46,19 +46,29 @@
 
 (defn gamma-meta->str
   [g-meta]
-  (reduce #(str %1 " gamma(" (first %2) ") = " (second %2)) "" g-meta))
+  (reduce #(str %1 "gamma(" (first %2) ") = " (second %2)) "" g-meta))
 
 (defn print-hyb-results
   [{:keys [species-matrix hybrid-data parental-data]}]
   (println "\n\n****************Results*****************\n")
   (println "\nD_AB Matrix:")
   (util/print-array species-matrix)
-  (println "\n Parental trees:\n")
+  (println "\nParental trees:\n")
   (doseq [d parental-data]
     (let [gamma-meta (:gamma (meta (:tree d)))]
-      (println gamma-meta->str gamma-meta)
+      (println (gamma-meta->str gamma-meta))
       (println "Lik:" (:lik d))
-      (println "AIC:" (:aic d)))))
+      (println "AIC:" (:aic d))
+      (println "k:" (:k d) "\n")))
+  (println "\nHybrid trees:\n")
+  (doseq [d hybrid-data]
+    (println "Gamma topology:" (gamma-meta->str (:gamma (meta (:tree d)))))
+    (println (:newick d))
+    (println "Lik:" (:lik d))
+    (let [idv (map vector (iterate inc 1) (:g-vals d))]
+      (doseq [[idx val] idv] (println (str "gamma" idx ": " val ))))
+    (println "AIC:" (:aic d))
+    (println "k:" (:k d))))
 
 (defn print-lik-job [{:keys [props env gene-trees]}]
   (println "The settings file was successfully parsed...\n")
