@@ -37,13 +37,34 @@
   [n]
   (apply c/cartesian-product (repeatedly n #(range 0 1 0.01))))
 
-(defn seq-gamma-coefs
+(defn old-seq-gamma-coefs
   "Returns the seq of multiplied gammas that are the coefficients used in computing
   the likelihood for each iteration of genetrees given the species trees."
   [gs]
   (let [gs-with-compls (interleave gs (map #(- 1 %) gs)) ; adds 1 - gamma for each gamma
         gammas-cp (apply c/cartesian-product (partition 2 gs-with-compls))]
     (map #(apply * %) gammas-cp)))
+
+(defn tree->gamma-coef
+  [g-vals h-spec->idx tree]
+  (let [g-top (:gamma (meta tree))]
+    (reduce (fn [tot [h-spec v]]
+              (let [h-idx (h-spec->idx h-spec)
+                    g-val (nth g-vals h-idx)]
+                (if (zero? v)
+                  (* tot g-val)
+                  (* tot (- 1 g-val)))))
+            1 g-top)))
+
+
+(defn seq-gamma-coefs
+  "gs is the sequence of gamma 'grid' values, with the first element being the gamma
+  value for gamma1, second for gamma2, etc.
+  For example, the P(gi|Si) is mutliplied by gamma coefficient like g1*(1-g2), etc.
+  This function returns a seq of these coefficents, one value for each
+  P(gi|Si) expression."
+  [g-vals h-spec->idx spec-trees]
+  (map #(tree->gamma-coef g-vals h-spec->idx %) spec-trees))
 
 (defn seq-liks-for-gtree
   "Returns a seq of likelihoods of a gene-tree given a seq of species trees"
@@ -67,8 +88,8 @@
 (defn lik-for-gammas
   "Given a seq of possible gamma values, find the product (over all genetrees), of the sum
   of the likelihoods of each genetree given the gamma coefficients and species trees"
-  [gs g-trees liks-for-gtree-fn]
-  (let [g-coefs (seq-gamma-coefs gs)]
+  [g-vals g-trees liks-for-gtree-fn spec-trees h-spec->idx]
+  (let [g-coefs (seq-gamma-coefs g-vals h-spec->idx spec-trees)]
     (reduce
      (fn [total g-tree]
        (let [liks-for-gtree (liks-for-gtree-fn g-tree)
@@ -79,13 +100,13 @@
 
 (defn find-gammas
   "Search for and return gammas that produce the largest likelihood"
-  [g-trees spec-trees spec-to-lin theta num-hyb-events]
+  [g-trees spec-trees h-spec->idx spec-to-lin theta num-hyb-events]
   (let [seq-gamma-vals (seq-gamma-vals num-hyb-events)
         memo-lik-fn (memoize l/calc-lik-for-tree)
         lik-gtree-fn (partial seq-liks-for-gtree spec-trees memo-lik-fn spec-to-lin theta)]
     (reduce
      (fn [[lik curr-gammas] new-gammas]
-       (let [new-lik (lik-for-gammas new-gammas g-trees lik-gtree-fn)]
+       (let [new-lik (lik-for-gammas new-gammas g-trees lik-gtree-fn spec-trees h-spec->idx)]
          (if (> new-lik lik)
            [new-lik new-gammas]
            [lik curr-gammas])))
@@ -268,7 +289,11 @@
   (let [logical-vals (map #(is-gamma-position-eq? (g-top %) (g-meta %)) (keys g-top))]
     (reduce #(and %1 %2) logical-vals)))
 
-(defn gamma-topology->hybrid-specs
+(defn old-gamma-topology->hybrid-specs
+  [g-top]
+  (reduce #(if (= (second %2) 2) (conj %1 (first %2)) %1) #{} g-top))
+
+(defn gamma-top->h-specs
   [g-top]
   (reduce #(if (= (second %2) 2) (conj %1 (first %2)) %1) #{} g-top))
 
@@ -278,23 +303,36 @@
   (e.g. {hyb1 0, hyb2 2}) to find these trees."
   [g-top p-trees spec-matrix spec->idx]
   (let [filtered-trees (filter #(is-parental-tree? (:gamma (meta %)) g-top) p-trees)
-        h-specs (gamma-topology->hybrid-specs g-top)]
+        h-specs (gamma-top->h-specs g-top)]
     (map #(fix-tree-times % spec-matrix spec->idx h-specs) filtered-trees)))
 
 (defn gamma-top->num-hybrids
   [g-top]
   (reduce #(+ %1 (if (= %2 2) 1 0)) 0 (vals g-top)))
 
+(defn basic-parental-tree
+  "This is the parental tree that is print out for a particular hybrid tree.
+  It is the tree where the h-specs in the gamma-top = 0 (by convention)"
+  [p-trees h-specs]
+  (let [f (fn [b [h v]]
+            (and b (and (contains? h-specs h) (= v 0))))]
+    (loop [trees p-trees]
+      (if (reduce f true (:gamma (meta (first trees))))
+        (first trees)
+        (recur (rest p-trees))))))
+
 (defn gamma-topology->hybrid-tree-data
   "Given a gamma topology, i.e. the topology of a hybrid tree, find the gamma
   value that produces the mle."
-  [gamma-top parental-trees gene-trees spec-matrix spec->idx spec->lin theta]
-  (let [n-hybrids (gamma-top->num-hybrids gamma-top)
+  [gamma-top parental-trees gene-trees spec-matrix h-spec->idx spec->idx spec->lin theta]
+  (let [h-specs (gamma-top->h-specs gamma-top)
+        n-hybrids (count h-specs)
         p-trees (p-trees-for-hybrid-tree gamma-top parental-trees spec-matrix spec->idx)
-        gamma-probs (find-gammas gene-trees p-trees spec->lin theta n-hybrids)
+        basic-tree (basic-parental-tree p-trees h-specs)
+        gamma-probs (find-gammas gene-trees p-trees h-spec->idx spec->lin theta n-hybrids)
         k (compute-k n-hybrids (count (keys spec->lin)))
         aic (compute-aic (first gamma-probs) k)]
-    (create-hybrid-tree-data (first p-trees) (n/vector-tree->newick-str (first p-trees))
+    (create-hybrid-tree-data basic-tree (n/vector-tree->newick-str basic-tree)
                              (second gamma-probs) (first gamma-probs) k aic)))
 
 (defn gamma-topologys
@@ -321,3 +359,10 @@
               (create-hybrid-tree-data p-tree newick nil lik k aic)
               ))
        parental-trees))
+
+(defn h-specs->gamma-ids
+  "Creates a map where the keys are the hybrid species, and the values
+  are the gamma index, e.g. #{'spec1' 1} means that spec1 is assigned
+  gamma1."
+  [h-specs]
+  (zipmap h-specs (range)))

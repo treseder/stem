@@ -19,7 +19,7 @@
   (re-find #"(\[(\d*\.\d*)\])?(.*)" s))
 
 
-(defn create-struct-from-parts
+(defn create-gene-tree-from-parts
   [rate-str newick-str theta]
   (let [rate (util/to-double rate-str)]
     (create-gene-tree
@@ -28,8 +28,11 @@
 
 (defn parse-gene-tree-str
   ([s theta & [r]]
-     (let [[_ _ rate n-str] (parse-rate-and-tree s)]
-       (create-struct-from-parts (or r rate) n-str theta))))
+     ;; if the user has input the rate as zero in the settings file,
+     ;; then the rates are defined in the gene-tree file
+     (let [[_ _ rate n-str] (parse-rate-and-tree s)
+           true-rate (if (nil? r) rate (if (zero? r) rate r))]
+       (create-gene-tree-from-parts true-rate n-str theta))))
 
 (defn parse-gene-tree-file
   "Returns a sequence of gene-tree structs found in file-name"

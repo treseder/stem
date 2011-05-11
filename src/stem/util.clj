@@ -4,6 +4,7 @@
             [clojure.java.io :as io]
             [clojure.zip :as z])
   (:import [java.io File StringReader BufferedReader FileNotFoundException]
+           [org.yaml.snakeyaml Yaml]
            [java.util Random]))
 
 (defn make-tree-zipper
@@ -130,6 +131,53 @@
 
 (defn make-precise [num]
   (-> num (format-time) (to-double)))
+
+
+;;;;;;;;;;; functions for parsing yaml settings file ;;;;;;;;;;;;;;;;;;;;;;;
+(defn file->yaml-map
+  "Build yaml map from yaml file.  Replaces all tabs with 2 spaces to ensure
+  yaml parser doesn't choke."
+  ([f] (file->yaml-map f ""))
+  ([f e-str]
+     (let [yaml (Yaml.)]
+       (with-exc (.load yaml (str/replace (read-file f) "\t" "  ")) e-str))))
+
+(defn yaml-map->map
+  "Turns a yaml 'LinkedHashMap' into a clojure map, where the keys are
+  keywords"
+  [y-map]
+  (zipmap (map keyword (.keySet y-map)) (map #(into {} %) (.values y-map))))
+
+(defn settings-file->map
+  [f e-str]
+  (-> (file->yaml-map f e-str) (yaml-map->map)))
+
+(defn parse-settings-file
+  "Reads in the yaml config file and returns a map with the following keys:
+  :files = a map - keys are filenames, values are the rate constant
+  :species = a map - keys are species names, values are comma separated lineages
+  :properties = a map with user configurable properties.
+
+  In addition, this function attempts to replace all tabs with 2 spaces in the
+  settings file, so the yaml parser doesn't choke."
+  ([] (parse-settings-file (get-settings-filename)))
+  ([f] (parse-settings-file f ""))
+  ([f e-str]
+     (let [f-name (if f f (get-settings-filename) )
+           s-map (settings-file->map f-name e-str)]
+       s-map)))
+
+(defn check-settings-map
+  [m e-strs]
+  (doseq [k [:properties :species]]
+    (abort-if-empty (k m) (k e-strs)))
+  m)
+
+(defn parse-tree-file [f]
+  (-> (with-exc (read-file f)
+        (str "You must specify a species tree in '" f "' to compute the likelihood."))
+      (remove-whitespace)
+      (str/split #";")))
 
 (defn get-file
   [f-name]

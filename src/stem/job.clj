@@ -9,8 +9,7 @@
             [stem.search :as s]
             [stem.gene-tree :as g-tree]
             [stem.hybrid :as h])
-  (:import [java.io BufferedReader FileReader]
-           [org.yaml.snakeyaml Yaml]))
+  (:import [java.io BufferedReader FileReader]))
 
 
 (defprotocol JobProtocol
@@ -37,21 +36,22 @@
    [job]
    (let [{:keys [spec-matrix]} (lt/get-lik-tree-parts gene-trees env false)
          spec->idx (env :spec-to-index)
-         h-specs (set (str/split (u/remove-whitespace (get props "hybrid_species" )) #","))
+         h-specs (str/split (u/remove-whitespace (get props "hybrid_species" )) #",")
+         h-spec->idx (h/h-specs->gamma-ids h-specs)
          optim-c-time-fn (partial newick/optimized-c-time spec->idx  spec-matrix)
          user-parental-tree (newick/newick->tree (env :hybrid-newick) 1.0 1.0 optim-c-time-fn)
          parental-trees (map #(s/fix-tree-times % spec-matrix spec->idx)
-                             (h/make-parental-trees user-parental-tree h-specs))
+                             (h/make-parental-trees user-parental-tree (set h-specs)))
          parental-data (h/parental-trees->parental-data parental-trees gene-trees
                                                         (env :spec-to-lin) (env :theta))
          
          ;; fixes parental tree lengths for hybridization
-         gamma-top (h/gamma-topologys h-specs)
+         gamma-top (h/gamma-topologys (set h-specs))
          hybrid-data (map #(h/gamma-topology->hybrid-tree-data
-                            % parental-trees gene-trees spec-matrix spec->idx
+                            % parental-trees gene-trees spec-matrix h-spec->idx spec->idx
                             (env :spec-to-lin) (env :theta))
                           gamma-top)
-         res {:species-matrix spec-matrix :hybrid-data hybrid-data :parental-data parental-data}]
+         res {:species-matrix spec-matrix :hybrid-data hybrid-data :parental-data parental-data :h-spec->idx h-spec->idx}]
      (assoc job :results res)))
   
   (print-results
@@ -220,47 +220,26 @@
      :lin-to-index lin-to-index
      :mat-size (count lin-set)}))
 
-(defn parse-settings-file
-  "Reads in the yaml config file and returns a map with the following keys:
-  :files = a map - keys are filenames, values are the rate constant
-  :species = a map - keys are species names, values are comma separated lineage names
-  :properties = a map with user configurable properties"
-  ([] (parse-settings-file (u/get-settings-filename)))
-  ([file-name]
-     (let [f (if (nil? file-name) (u/get-settings-filename) file-name)
-           yaml (Yaml.)
-           yaml-map (u/with-exc
-                      (.load yaml (str/replace (u/read-file f) "\t" "  ")) (m/e-strs :yaml))
-           ; changes a yaml-map to a clojure map
-           s-map (zipmap (map keyword (.keySet yaml-map))
-                         (map #(into {} %) (.values yaml-map)))]
-       (doseq [k [:properties :species]]
-         (u/abort-if-empty (k s-map) (k m/e-strs)))
-       s-map)))
-
-(defn parse-user-tree-file [f]
-  (-> (u/with-exc (u/read-file f) (str "You must specify a species tree in '" f "' to compute the likelihood."))
-      (u/remove-whitespace)
-      (str/split #";")))
-
 (defn create-job [& file]
-  (let [{:keys [properties files species] :as s} (parse-settings-file (first file))
+  (let [s (-> (u/parse-settings-file (first file) (m/e-strs :yaml))
+              (u/check-settings-map m/e-strs))
+        {:keys [properties files species]} s 
         env (create-env s)
         gene-trees (g-tree/get-gene-trees files (env :theta))]
     (case (properties "run")
           0 (UserTreeJob. properties
-                          (assoc env :user-trees (parse-user-tree-file "user.tre")) gene-trees nil)
+                          (assoc env :user-trees (u/parse-tree-file "user.tre")) gene-trees nil)
           2 (SearchJob. properties env gene-trees nil)
           3 (HybridJob. properties
-                        (assoc env :hybrid-newick (first (parse-user-tree-file "hybrid.tre")))
+                        (assoc env :hybrid-newick (first (u/parse-tree-file "hybrid.tre")))
                         gene-trees nil)
           (LikJob. properties env gene-trees nil))))
 
 (defn run-job
   [file]
   (do (-> (create-job file)
-       (pre-run-check)
-       (print-job)
-       (run)
-       (print-results))
+          (pre-run-check)
+          (print-job)
+          (run)
+          (print-results))
       (println "Finished")))

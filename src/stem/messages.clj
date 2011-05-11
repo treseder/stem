@@ -39,17 +39,16 @@
   (println (str "The settings file contained " (count (env :spec-set)) " species and " (count (env :lin-set)) " lineages.\n"))
   (println "The species-to-lineage mappings are:\n")
   (doseq [[k v] (env :spec-to-lin)] (println (str k ": " (apply str (interpose ", " v)))))
-  (println "\nHybridization params:\n")
-  (println (str "Hybrid species: " (get props "hybrid_species")))
+  (println (str "\nHybrid species: " (get props "hybrid_species")))
   (println (str "\nHybrid input tree:\n"))
   (println (env :hybrid-newick)))
 
 (defn gamma-meta->str
   [g-meta]
-  (reduce #(str %1 "gamma(" (first %2) ") = " (second %2)) "" g-meta))
+  (reduce #(str %1 "gamma(" (first %2) ") = " (second %2)) " " g-meta))
 
 (defn print-hyb-results
-  [{:keys [species-matrix hybrid-data parental-data]}]
+  [{:keys [species-matrix hybrid-data parental-data h-spec->idx]}]
   (println "\n\n****************Results*****************\n")
   (println "\nD_AB Matrix:")
   (util/print-array species-matrix)
@@ -57,16 +56,16 @@
   (doseq [d parental-data]
     (let [gamma-meta (:gamma (meta (:tree d)))]
       (println (gamma-meta->str gamma-meta))
+      (println (:newick d))
       (println "Lik:" (:lik d))
       (println "AIC:" (:aic d))
       (println "k:" (:k d) "\n")))
   (println "\nHybrid trees:\n")
   (doseq [d hybrid-data]
-    (println "Gamma topology:" (gamma-meta->str (:gamma (meta (:tree d)))))
     (println (:newick d))
     (println "Lik:" (:lik d))
-    (let [idv (map vector (iterate inc 1) (:g-vals d))]
-      (doseq [[idx val] idv] (println (str "gamma" idx ": " val ))))
+    (doseq [[h-spec idx] h-spec->idx]
+      (println (str "gamma(" h-spec "): " (nth (:g-vals d) idx))))
     (println "AIC:" (:aic d))
     (println "k:" (:k d))))
 

@@ -129,8 +129,8 @@
    (> lik lik2) -1
    (< lik lik2) 1
    (and (= lik lik2) (u/quasi-isomorphic? tree tree2)) 0
-   :default (compare (n/vector-tree->newick-str tree)
-                     (n/vector-tree->newick-str tree2))))
+   :default (compare (n/vector-tree->newick-str tree true)
+                     (n/vector-tree->newick-str tree2 true))))
 
 (defn search-for-trees
   [s-vec-tree gene-trees spec-matrix props env]

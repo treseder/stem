@@ -156,24 +156,27 @@
       [b2 b1])))
 
 (defn rec-vector-tree->newick-str
-  [branch p-time]
+  [branch p-time sort-branches?]
   (let [[{:keys [name c-time]} l r] branch]
     (if (is-leaf? branch)
       (str name ":"  (util/format-time p-time))
-      (let [s-brans (sorted-branches l r)]
-          (str "(" (rec-vector-tree->newick-str (first s-brans) c-time) ","
-            (rec-vector-tree->newick-str (second s-brans) c-time) ")" ":"
+      (let [s-brans (if sort-branches? (sorted-branches l r) [l r])]
+          (str "(" (rec-vector-tree->newick-str (first s-brans) c-time sort-branches?) ","
+            (rec-vector-tree->newick-str (second s-brans) c-time sort-branches?) ")" ":"
             (util/format-time (- p-time c-time)))))))
 
 (defn vector-tree->newick-str
   "Turns any vector nested tree into a newick string.  Two trees that are
-  quasi-isomorphic (with same leaf nodes) will return the same newick string."
-  [tree]
+  quasi-isomorphic (with same leaf nodes) will return the same newick string.
+  Sorting the branches is optional - this is important when trying to find tied
+  trees."
+  ([tree] (vector-tree->newick-str tree false))
+  ([tree sort-branches?]
   (let [[{c-time :c-time} l r] tree
         ; order branches, so quasi-isomorphic trees are the same
-        s-brans (sorted-branches l r)]
-    (str "(" (rec-vector-tree->newick-str (first s-brans) c-time) ","
-         (rec-vector-tree->newick-str (second s-brans) c-time) ");" )))
+        s-brans (if sort-branches? (sorted-branches l r) [l r])]
+    (str "(" (rec-vector-tree->newick-str (first s-brans) c-time sort-branches?) ","
+         (rec-vector-tree->newick-str (second s-brans) c-time sort-branches?) ");" ))))
 
 ;;;;;;;;;;;;;;;;;;
 ;; drawing trees
