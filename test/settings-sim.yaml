@@ -1,0 +1,16 @@
+properties:
+  run: 3
+  theta: 1.0
+  beta: 0.0005
+  burnin: 100
+  hybrid_species: H2
+  hybrid_tree: "sp1.tre"
+files:
+  sim.tre: 1.0
+species:
+  A: A
+  H1: H1
+  B: B
+  C: C
+  H2: H2
+  D: D

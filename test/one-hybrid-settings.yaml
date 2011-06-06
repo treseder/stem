@@ -1,0 +1,14 @@
+properties:
+  run: 3
+  theta: 1.0
+  beta: 0.0005
+  burnin: 100
+  hybrid_species: H
+  hybrid_tree: test/one-hybrid.tre
+files:
+  test/one-hybrid-genetrees.tre: 1.0
+species:
+  A: A
+  H: H
+  B: B
+  C: C

@@ -45,13 +45,10 @@
 
 (defn gamma-meta->str
   [g-meta]
-  (reduce #(str %1 "gamma(" (first %2) ") = " (second %2)) " " g-meta))
+  (reduce #(str %1 "gamma(" (first %2) ") = " (second %2) " ") "" g-meta))
 
-(defn print-hyb-results
-  [{:keys [species-matrix hybrid-data parental-data h-spec->idx]}]
-  (println "\n\n****************Results*****************\n")
-  (println "\nD_AB Matrix:")
-  (util/print-array species-matrix)
+(defn print-hyb-parental-trees
+  [parental-data]
   (println "\nParental trees:\n")
   (doseq [d parental-data]
     (let [gamma-meta (:gamma (meta (:tree d)))]
@@ -59,15 +56,32 @@
       (println (:newick d))
       (println "Lik:" (:lik d))
       (println "AIC:" (:aic d))
-      (println "k:" (:k d) "\n")))
+      (println "k:" (:k d) "\n"))))
+
+(defn print-hyb-trees
+  [hybrid-data]
   (println "\nHybrid trees:\n")
   (doseq [d hybrid-data]
     (println (:newick d))
     (println "Lik:" (:lik d))
-    (doseq [[h-spec idx] h-spec->idx]
+    (doseq [[h-spec idx] (:h->idx d)]
       (println (str "gamma(" h-spec "): " (nth (:g-vals d) idx))))
     (println "AIC:" (:aic d))
-    (println "k:" (:k d))))
+    (println "k:" (:k d) "\n")))
+
+(defn print-hyb-results
+  [{:keys [species-matrix hybrid-data parental-data h-spec->idx]}]
+  (println "\n\n****************Results*****************\n")
+  (println "\nD_AB Matrix:")
+  (util/print-array species-matrix)
+  (print-hyb-parental-trees parental-data)
+  (print-hyb-trees hybrid-data))
+
+(defn print-hyb-results-to-file
+  "Assumes caller has bound *out* to file."
+  [{:keys [species-matrix hybrid-data parental-data h-spec->idx]}]
+  (print-hyb-parental-trees parental-data)
+  (print-hyb-trees hybrid-data))
 
 (defn print-lik-job [{:keys [props env gene-trees]}]
   (println "The settings file was successfully parsed...\n")

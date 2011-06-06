@@ -1,0 +1,30 @@
+properties:
+  run: 2
+  theta: 0.005
+  num_saved_trees: 10
+  beta: 0.000500
+  burnin: 100
+  seed: 1
+  bound_total_iter: 100
+
+files:
+  test/search-genetrees.tre: 0.0
+
+species:
+  Ac: ac1OUTG1, ac1OUTG2, apc1OUTG1, apc1OUTG2
+  Scc: sca151WI1,sca151WI2,sca156IN1,sca156IN2,sca163MI1,sca163MI2,sca348OHR1,sca348OHR2,sca39PENN1,sca39PENN2,sca44NY1,sca44NY2,sca583OHK1,sca583OHK2,sca806ILL1,sca806ILL2,sca88OHC1,sca88OHC2
+  Sce: sced127AZ1,sced127AZ2,sced150CO1,sced150CO2,sced27NM1,sced27NM2,sced32AZ1,sced32AZ2
+  Sct: scter115KS1,scter115KS2,scter16KS1,scter16KS2,scter2KS1,scter2KS2,scter49MO1,scter49MO2,scter83MO1,scter83MO2
+  Smm: smc1NC1,smc1NC2
+  Smb: smi100FL1,smi100FL2, smi104FL1, smi104FL2, smi2FL1,smi2FL2
+  Sms: sms1OK1, sms1OK2, sms2OK1, sms2OK2
+
+   
+
+
+
+
+
+
+
+

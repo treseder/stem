@@ -7,6 +7,35 @@
            [org.yaml.snakeyaml Yaml]
            [java.util Random]))
 
+(def in-production? false)
+
+(defn abort
+  ([message] (abort message nil))
+  ([message e]
+     (println message)
+     (when e
+       (println (.getMessage e)))
+     (when in-production?
+       (do
+         (println "\nExiting STEM...")
+         (System/exit 1)))))
+
+(defmulti abort-if-empty
+  (fn [v m]
+    (class v)))
+
+(defmethod abort-if-empty java.lang.String
+  [v message]
+  (when (= v "") (abort message nil)))
+
+(defmethod abort-if-empty java.lang.Number
+  [v message])
+
+(defmethod abort-if-empty :default
+  [v message]
+  (if (or (nil? v) (empty? v))
+    (abort message nil)))
+
 (defn make-tree-zipper
   "Makes a valid zipper based on the nested tree structure used throughout STEM:
   [{node info} [left branch][right branch]]"
@@ -31,10 +60,49 @@
                (and (quasi-isomorphic? l1 l2) (quasi-isomorphic? r1 r2))
                (and (quasi-isomorphic? l1 r2) (quasi-isomorphic? r1 l2))))))
 
+(defn seq-locs-by-id
+  "Returns seq of locs in tree that match up with n-ids"
+  [root n-ids]
+  (loop [loc (z/next (make-tree-zipper root))
+         locs (transient [])]
+    (if (z/end? loc)
+      (persistent! locs)
+      (let [[{name :name} _ _] (z/node loc)]
+        (if (contains? n-ids name)
+          (recur (z/next loc) (conj! locs loc))
+          (recur (z/next loc) locs))))))
+
+(defn outgroup?
+  "Returns true if loc is an outgroup, i.e., root is its parent."
+  [loc]
+  (let [[{name :name} _ _] (z/node (z/up loc))]
+    (= name *root-name*)))
+
+(defn sisters?
+  "Returns true if any of the poss-sisters are actually a sister node
+  of loc."
+  [loc maybe-sisters]
+  (let [[{sis-name :name} _ _] (z/node (or (z/left loc) (z/right loc)))]
+    (contains? maybe-sisters sis-name)))
+
+(defn check-hybrid-loc
+  [loc h-specs]
+  (let [err-str "Not a valid hybrid tree. "
+        [{name :name} _ _] (z/node loc)]
+    (cond
+     (outgroup? loc) (abort (str err-str name " is an outgroup.\n"))
+     (sisters? loc h-specs) (abort (str err-str name " is a sister of another hybrid species.\n")))))
+
+(defn is-valid-hybrid-tree
+  "Checks that hybrid species don't belong to outgroup and, if there are more
+  than two species, that none of them are sisters."
+  [tree h-specs]
+  (let [locs (seq-locs-by-id tree h-specs)]
+    (doseq [l locs] (check-hybrid-loc l h-specs))))
+
+
 (defn zero->min [val]
   (if-not (zero? val) val (Double/MIN_VALUE)))
-
-(def in-production? false)
 
 (defmacro with-exc [body message]
   `(try
@@ -66,33 +134,6 @@
   (let [c (atom init-val)] 
     {:next #(swap! c inc)
      :reset #(reset! c init-val)}))
-
-(defn abort
-  ([message] (abort message nil))
-  ([message e]
-     (println message)
-     (when e
-       (println (.getMessage e)))
-     (when in-production?
-       (do
-         (println "\nExiting STEM...")
-         (System/exit 1)))))
-
-(defmulti abort-if-empty
-  (fn [v m]
-    (class v)))
-
-(defmethod abort-if-empty java.lang.String
-  [v message]
-  (when (= v "") (abort message nil)))
-
-(defmethod abort-if-empty java.lang.Number
-  [v message])
-
-(defmethod abort-if-empty :default
-  [v message]
-  (if (or (nil? v) (empty? v))
-    (abort message nil)))
 
 (defmulti to-double class)
 
@@ -127,13 +168,33 @@
         (recur (rest lines))))))
 
 (defn format-time [time]
-  (cl-format nil "~,5f" time))
+  (format "%.5f" (double time))
+  ;(cl-format nil "~,5f" time)
+  )
 
 (defn make-precise [num]
   (-> num (format-time) (to-double)))
 
+(defn remove-whitespace [s]
+  (str/replace s #"\s" ""))
+
+(defn indexed-map
+  [coll]
+  (zipmap coll (range (count coll))))
 
 ;;;;;;;;;;; functions for parsing yaml settings file ;;;;;;;;;;;;;;;;;;;;;;;
+(defn contains-settings?
+  [filename]
+  (or (. filename equals "settings")
+      (. filename equals "settings.txt")
+      (. filename  equals "settings.yaml")))
+
+(defn get-settings-filename
+  "Searches the current directory for a file that is named
+  'settings', or 'settings.txt', or 'settings.yaml', in that order"
+  []
+  (first (sort (filter contains-settings? (. (File. ".") list)))))
+
 (defn file->yaml-map
   "Build yaml map from yaml file.  Replaces all tabs with 2 spaces to ensure
   yaml parser doesn't choke."
@@ -185,21 +246,6 @@
    (File. f-name)
    (catch Exception _
      (abort (str "Couldn't find the file: " f-name)))))
-
-(defn contains-settings?
-  [filename]
-  (or (. filename equals "settings")
-      (. filename equals "settings.txt")
-      (. filename  equals "settings.yaml")))
-
-(defn get-settings-filename
-  "Searches the current directory for a file that is named
-  'settings', or 'settings.txt', or 'settings.yaml', in that order"
-  []
-  (first (sort (filter contains-settings? (. (File. ".") list)))))
-
-(defn remove-whitespace [s]
-  (str/replace s #"\s" ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; multi-dim array functions

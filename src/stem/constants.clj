@@ -17,4 +17,7 @@
 (def *mle-filename-default* "mle.tre")
 (def *bootstrap-filename* "boot.tre")
 (def *search-filename-default* "search.tre")
+(def *hybrid-filename-default* "hybrid.tre")
+(def *hybrid-results-filename-default* "hybrid-results.txt")
+(def *user-filename-default* "user_tree")
 

@@ -6,12 +6,6 @@
             [clojure.zip :as z]
             [clojure.contrib.combinatorics :as c]))
 
-(defrecord HybridTreeData [tree newick g-vals lik k aic])
-
-(defn create-hybrid-tree-data
-  [tree newick g-vals lik k aic]
-  (HybridTreeData. tree newick g-vals lik k aic))
-
 (def *min-big-decimal* (BigDecimal/valueOf (Double/MIN_VALUE)))
 (def *min-log* (Math/log (Double/MIN_VALUE)))
 (def *math-cxt* (java.math.MathContext. 5))
@@ -47,7 +41,9 @@
 
 (defn tree->gamma-coef
   [g-vals h-spec->idx tree]
-  (let [g-top (:gamma (meta tree))]
+  ; filters out hybrids that we might not need, since the gamma meta
+  ; contains info for *all* the hybrids
+  (let [g-top (select-keys (:gamma (meta tree)) (keys h-spec->idx))]
     (reduce (fn [tot [h-spec v]]
               (let [h-idx (h-spec->idx h-spec)
                     g-val (nth g-vals h-idx)]
@@ -60,7 +56,7 @@
 (defn seq-gamma-coefs
   "gs is the sequence of gamma 'grid' values, with the first element being the gamma
   value for gamma1, second for gamma2, etc.
-  For example, the P(gi|Si) is mutliplied by gamma coefficient like g1*(1-g2), etc.
+  For example, the P(gi|Si) is mutliplied by gamma coefficient g1*(1-g2), etc.
   This function returns a seq of these coefficents, one value for each
   P(gi|Si) expression."
   [g-vals h-spec->idx spec-trees]
@@ -313,26 +309,36 @@
 (defn basic-parental-tree
   "This is the parental tree that is print out for a particular hybrid tree.
   It is the tree where the h-specs in the gamma-top = 0 (by convention)"
-  [p-trees h-specs]
+  [p-trees h-specs g-top]
   (let [f (fn [b [h v]]
-            (and b (and (contains? h-specs h) (= v 0))))]
+            (and b (if (contains? h-specs h)
+                     (= v 0) ; makes sure hybrid is in 0 position
+                     (= (g-top h) v))))]
     (loop [trees p-trees]
       (if (reduce f true (:gamma (meta (first trees))))
         (first trees)
-        (recur (rest p-trees))))))
+        (recur (rest trees))))))
+
+(defrecord HybridTreeData [tree newick h->idx g-vals lik k aic])
+
+(defn create-hybrid-tree-data
+  [tree newick h->idx g-vals lik k aic]
+  (HybridTreeData. tree newick h->idx g-vals lik k aic))
+
 
 (defn gamma-topology->hybrid-tree-data
   "Given a gamma topology, i.e. the topology of a hybrid tree, find the gamma
   value that produces the mle."
   [gamma-top parental-trees gene-trees spec-matrix h-spec->idx spec->idx spec->lin theta]
   (let [h-specs (gamma-top->h-specs gamma-top)
+        h->idx (u/indexed-map h-specs)
         n-hybrids (count h-specs)
         p-trees (p-trees-for-hybrid-tree gamma-top parental-trees spec-matrix spec->idx)
-        basic-tree (basic-parental-tree p-trees h-specs)
-        gamma-probs (find-gammas gene-trees p-trees h-spec->idx spec->lin theta n-hybrids)
+        basic-tree (basic-parental-tree p-trees h-specs gamma-top)
+        gamma-probs (find-gammas gene-trees p-trees h->idx spec->lin theta n-hybrids)
         k (compute-k n-hybrids (count (keys spec->lin)))
         aic (compute-aic (first gamma-probs) k)]
-    (create-hybrid-tree-data basic-tree (n/vector-tree->newick-str basic-tree)
+    (create-hybrid-tree-data basic-tree (n/vector-tree->newick-str basic-tree) h->idx
                              (second gamma-probs) (first gamma-probs) k aic)))
 
 (defn gamma-topologys
@@ -356,8 +362,7 @@
                   newick (n/vector-tree->newick-str p-tree)
                   k (compute-k 0 (count (keys spec->lin)))
                   aic (compute-aic lik k)]
-              (create-hybrid-tree-data p-tree newick nil lik k aic)
-              ))
+              (create-hybrid-tree-data p-tree newick nil nil lik k aic)))
        parental-trees))
 
 (defn h-specs->gamma-ids

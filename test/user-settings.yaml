@@ -1,0 +1,16 @@
+properties:
+  run: 0
+  user_tree: test/user.tre
+  theta: 0.001
+  beta: 0.0005
+  burnin: 100
+  seed: 1
+  bound_total_iter: 20
+  num_saved_trees:  10
+files:
+  test/simple-mle-genetrees.tre: 1.0
+species:
+  Species1: Name1, Name2, Name3
+  Species2: Name4, Name5
+  Species3: Name6, MyName7
+  Species4: Name8

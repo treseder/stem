@@ -1,0 +1,15 @@
+properties:
+  run: 2           #0=user-tree, 1=MLE, 2=search
+  theta: 1.0
+  num_saved_trees: 10
+  beta: 0.0005
+  bound_total_iter: 100
+  seed: 1
+files:
+  test/ties-genetrees.tre: 1.0
+species:
+  A: A
+  B: B
+  C: C
+  D: D
+

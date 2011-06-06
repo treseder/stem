@@ -1,12 +1,9 @@
 classes/*
-*.tre
-*.tree
-*.yaml
 */**#*
 */#*
 tmp.clj
 lib/dev/*
-*.jar
+
 
 
 

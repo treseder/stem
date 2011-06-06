@@ -1,0 +1,12 @@
+properties:
+  run: 1          
+  theta: 0.0001
+  num_saved_trees: 15
+  beta: 0.0005
+files:
+  test/missing-data-genetrees.tre: 1.0
+species:
+  ingroup: db102a, db102b, td77, db107b, db107a, td262a, td105b, td105a, td262b
+  midgroup: td114b, co4a, co4b
+  outgroup: td90a, td90b, td93a, td93b
+  midgroup2: i992ma, i992mb

@@ -9,7 +9,7 @@
             [stem.search :as s]
             [stem.gene-tree :as g-tree]
             [stem.hybrid :as h])
-  (:import [java.io BufferedReader FileReader]))
+  (:import [java.io BufferedReader FileReader File FileWriter]))
 
 
 (defprotocol JobProtocol
@@ -25,6 +25,9 @@
    [job]
    (doseq [k [:theta :lin-set :spec-set]]
      (u/abort-if-empty (env k) (m/e-strs k)))
+   (u/is-valid-hybrid-tree
+    (newick/newick->tree (env :hybrid-newick) 1.0 1.0)
+    (set (str/split (u/remove-whitespace (get props "hybrid_species" )) #",")))
    job)
   
   (print-job
@@ -38,19 +41,17 @@
          spec->idx (env :spec-to-index)
          h-specs (str/split (u/remove-whitespace (get props "hybrid_species" )) #",")
          h-spec->idx (h/h-specs->gamma-ids h-specs)
-         optim-c-time-fn (partial newick/optimized-c-time spec->idx  spec-matrix)
+         optim-c-time-fn (partial newick/optimized-c-time spec->idx spec-matrix)
          user-parental-tree (newick/newick->tree (env :hybrid-newick) 1.0 1.0 optim-c-time-fn)
          parental-trees (map #(s/fix-tree-times % spec-matrix spec->idx)
                              (h/make-parental-trees user-parental-tree (set h-specs)))
          parental-data (h/parental-trees->parental-data parental-trees gene-trees
                                                         (env :spec-to-lin) (env :theta))
-         
-         ;; fixes parental tree lengths for hybridization
-         gamma-top (h/gamma-topologys (set h-specs))
+         gamma-tops (h/gamma-topologys (set h-specs))
          hybrid-data (map #(h/gamma-topology->hybrid-tree-data
                             % parental-trees gene-trees spec-matrix h-spec->idx spec->idx
                             (env :spec-to-lin) (env :theta))
-                          gamma-top)
+                          gamma-tops)
          res {:species-matrix spec-matrix :hybrid-data hybrid-data :parental-data parental-data :h-spec->idx h-spec->idx}]
      (assoc job :results res)))
   
@@ -61,6 +62,8 @@
  
   (print-results-to-file
    [job]
+   (binding [*out* (java.io.FileWriter. (File. *hybrid-results-filename-default*))]
+     (m/print-hyb-results-to-file results))
    job))
 
 
@@ -227,12 +230,20 @@
         env (create-env s)
         gene-trees (g-tree/get-gene-trees files (env :theta))]
     (case (properties "run")
-          0 (UserTreeJob. properties
-                          (assoc env :user-trees (u/parse-tree-file "user.tre")) gene-trees nil)
+          0 (UserTreeJob.
+             properties
+             (assoc env :user-trees (u/parse-tree-file (get properties
+                                                            "user_tree"
+                                                            *user-filename-default*)))
+             gene-trees nil)
           2 (SearchJob. properties env gene-trees nil)
-          3 (HybridJob. properties
-                        (assoc env :hybrid-newick (first (u/parse-tree-file "hybrid.tre")))
-                        gene-trees nil)
+          3 (HybridJob.
+             properties
+             (assoc env :hybrid-newick (first (u/parse-tree-file
+                                               (get properties
+                                                    "hybrid_tree"
+                                                    *hybrid-filename-default*))))
+             gene-trees nil)
           (LikJob. properties env gene-trees nil))))
 
 (defn run-job
@@ -241,5 +252,6 @@
           (pre-run-check)
           (print-job)
           (run)
-          (print-results))
+          (print-results)
+          (print-results-to-file))
       (println "Finished")))
